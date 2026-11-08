@@ -24,6 +24,7 @@ const DEFAULT_USERS_CATALOG = [
     address: 'Calle Los Álamos 142',
     block: 'Manzana B',
     avatar: '',
+    securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' },
   },
   {
     id: 'usr_yummy_untiveros',
@@ -34,6 +35,7 @@ const DEFAULT_USERS_CATALOG = [
     address: 'La Casica - Pachacamac',
     block: 'Manzana C',
     avatar: '',
+    securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' },
   },
   {
     id: 'usr_dona_rosa',
@@ -44,6 +46,7 @@ const DEFAULT_USERS_CATALOG = [
     address: 'Pasaje San Martín 12',
     block: 'Manzana A',
     avatar: '',
+    securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' },
   },
   {
     id: 'usr_lucia_fernandez',
@@ -54,6 +57,7 @@ const DEFAULT_USERS_CATALOG = [
     address: 'Av. Pachacamac 45',
     block: 'Manzana B',
     avatar: '',
+    securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' },
   },
   {
     id: 'usr_961024198',
@@ -64,6 +68,7 @@ const DEFAULT_USERS_CATALOG = [
     address: 'La Casica, Mz C - Pachacamac',
     block: 'Manzana C',
     avatar: '',
+    securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' },
   },
   {
     id: 'usr_933613515',
@@ -74,6 +79,7 @@ const DEFAULT_USERS_CATALOG = [
     address: 'Pachacamac',
     block: 'Manzana C',
     avatar: '',
+    securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' },
   },
   {
     id: 'usr_pedro_castillo',
@@ -84,6 +90,7 @@ const DEFAULT_USERS_CATALOG = [
     address: 'Sector 3',
     block: 'Manzana D',
     avatar: '',
+    securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' },
   },
 ];
 
@@ -166,10 +173,6 @@ export const storageService = {
     return this.get(STORAGE_KEYS.OFFLINE_QUEUE, []);
   },
 
-  setOfflineQueue(queue) {
-    this.set(STORAGE_KEYS.OFFLINE_QUEUE, queue);
-  },
-
   clearOfflineQueue() {
     this.set(STORAGE_KEYS.OFFLINE_QUEUE, []);
   },
@@ -217,6 +220,11 @@ export const storageService = {
       address: user.address || '',
       block: user.block || (user.address || 'Pachacamac'),
       avatar: user.avatar || '',
+      securityQuestions: user.securityQuestions || (existingIndex >= 0 ? users[existingIndex].securityQuestions : null) || {
+        q1: 'boby',
+        q2: 'ceviche',
+        q3: 'san martin',
+      },
       lat: user.lat || -12.0464,
       lng: user.lng || -77.0428,
       isRegistered: true,
@@ -248,16 +256,25 @@ export const storageService = {
     }) || null;
   },
 
-  updateUserPin(phone, newPin) {
-    if (!phone || !newPin) return false;
-    const cleanPhone = (phone || '').replace(/\D/g, '').slice(-9);
+  updateUserPassword(identifier, newPassword) {
+    if (!identifier || !newPassword) return false;
+    const cleanLower = identifier.toString().trim().toLowerCase();
+    const cleanDigits = identifier.toString().replace(/\D/g, '').slice(-9);
     const users = this.getRegisteredUsers();
-    const idx = users.findIndex(u => (u.phone || '').replace(/\D/g, '').slice(-9) === cleanPhone);
+    const idx = users.findIndex(u => 
+      (u.email && u.email.toLowerCase() === cleanLower) ||
+      (cleanDigits.length >= 6 && (u.phone || '').replace(/\D/g, '').slice(-9) === cleanDigits) ||
+      (u.name && u.name.toLowerCase() === cleanLower)
+    );
     if (idx >= 0) {
-      users[idx] = { ...users[idx], pin: newPin };
+      users[idx] = { ...users[idx], password: newPassword, pin: newPassword };
       this.set(STORAGE_KEYS.REGISTERED_USERS, users);
       return true;
     }
     return false;
+  },
+
+  updateUserPin(phone, newPin) {
+    return this.updateUserPassword(phone, newPin);
   }
 };
