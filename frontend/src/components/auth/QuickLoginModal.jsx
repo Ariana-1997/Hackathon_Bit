@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNeighborhood } from '../../context/NeighborhoodContext';
 import { getInitials } from '../../utils/userUtils';
-import { storageService } from '../../services/storageService';
 import { apiService } from '../../services/apiService';
 import LocationPickerModal from '../common/LocationPickerModal';
 import { 
@@ -33,8 +32,8 @@ export default function QuickLoginModal({ isOpen, onClose }) {
   const [authView, setAuthView] = useState('LOGIN');
 
   // Estados de Iniciar Sesión con Correo y Contraseña
-  const [loginIdentifier, setLoginIdentifier] = useState('yummy@barrio.pe');
-  const [loginPassword, setLoginPassword] = useState('Password123!');
+  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [isCheckingUser, setIsCheckingUser] = useState(false);
@@ -109,7 +108,7 @@ export default function QuickLoginModal({ isOpen, onClose }) {
       setFirstName(first);
       setLastName(last);
       setEmail(currentUser.email || '');
-      setPassword(currentUser.password || 'Password123!');
+      setPassword('');
       setPhone(currentUser.phone || '933613514');
       setAddress(currentUser.address || '');
       setAvatar(currentUser.avatar || '');
@@ -140,8 +139,8 @@ export default function QuickLoginModal({ isOpen, onClose }) {
       setSecAnswer3('san martin');
       setCoords(null);
       setIsGpsLocated(false);
-      setLoginIdentifier('yummy@barrio.pe');
-      setLoginPassword('Password123!');
+      setLoginIdentifier('');
+      setLoginPassword('');
       setLoginError('');
       setUserNotFoundError(null);
       setIsCheckingUser(false);
@@ -175,149 +174,64 @@ export default function QuickLoginModal({ isOpen, onClose }) {
     setIsCheckingUser(true);
 
     try {
-      // 1. Intentar iniciar sesión primero en el backend de Supabase/Spring Boot
-      let backendSuccess = false;
-      let backendData = null;
-      try {
-        backendData = await apiService.login(query, loginPassword);
-        backendSuccess = !!backendData?.accessToken;
-      } catch (errApi) {
-        console.warn('[Backend Login Notice]:', errApi.message);
+      const backendData = await apiService.login(query, loginPassword);
+      if (!backendData?.accessToken) {
+        throw new Error('El backend no devolvió una sesión válida.');
       }
-
-      // 2. Verificar en la base de datos sincronizada local o catálogo
-      const checkRes = await apiService.checkUserExists(query);
-      const localRes = storageService.findRegisteredUser(query);
-      const foundUser = checkRes?.user || localRes;
-
-      if (!foundUser && !backendSuccess) {
-        setIsCheckingUser(false);
-        setUserNotFoundError({ identifier: query });
-        showToast('Esta cuenta no se encuentra registrada', 'warning');
-        return;
-      }
-
-      // 3. Validar contraseña estricta
-      // La contraseña debe coincidir exactamente con la del usuario registrado o del backend
-      const expectedPassword = foundUser?.password;
-      let isPassCorrect = false;
-
-      if (backendSuccess) {
-        isPassCorrect = true;
-      } else if (expectedPassword) {
-        // Validación exacta: Solo si coincide con la contraseña con la que se registró
-        isPassCorrect = (loginPassword === expectedPassword);
-      } else {
-        // En caso de usuarios heredados sin contraseña previa
-        isPassCorrect = (loginPassword === 'Password123!');
-      }
-
-      if (!isPassCorrect) {
-        setIsCheckingUser(false);
-        setLoginError('Contraseña incorrecta. Por favor verifica tu contraseña.');
-        showToast('❌ Contraseña incorrecta', 'error');
-        return;
-      }
-
-      setIsCheckingUser(false);
-
-      // Iniciar sesión exitosamente
-      loginUser({
-        email: foundUser?.email || query,
-        phone: foundUser?.phone || '933613514',
-        name: foundUser?.name || 'Vecino',
-        address: foundUser?.address || '',
-        block: foundUser?.block || (foundUser?.address ? foundUser.address : 'Pachacamac'),
-        avatar: foundUser?.avatar || '',
-        password: foundUser?.password || loginPassword,
+      await loginUser({
+        ...(backendData.perfil || {}),
+        email: query,
+        perfil: backendData.perfil,
       });
-
-      showToast(`👋 ¡Bienvenido de vuelta, ${foundUser?.name?.split(' ')[0] || 'Vecino'}!`, 'success');
+      setIsCheckingUser(false);
+      showToast(`👋 ¡Bienvenido${backendData.perfil?.nombre ? ', ' + backendData.perfil.nombre.split(' ')[0] : ''}!`, 'success');
       onClose();
     } catch (err) {
       setIsCheckingUser(false);
-      setLoginError('Error verificando credenciales en el servidor.');
+      setLoginError(err.message || 'Credenciales inválidas o error de conexión con el backend.');
     }
   };
 
-  // Atajos rápidos para el jurado del Hackathon
-  const handleQuickLoginPreset = (presetEmail, presetName, presetPhone, presetPassword = 'Password123!') => {
+  // Los accesos de demostración solo rellenan el formulario; nunca autentican sin validar en Spring Boot.
+  const handleQuickLoginPreset = (presetEmail) => {
     setLoginIdentifier(presetEmail);
-    setLoginPassword(presetPassword);
-    setLoginError('');
-    loginUser({ 
-      email: presetEmail, 
-      name: presetName, 
-      phone: presetPhone,
-      password: presetPassword,
-      address: 'La Casica, Mz C - Pachacamac',
-      block: 'Manzana C',
-      securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' }
-    });
-    showToast(`👋 Bienvenido, ${presetName.split(' ')[0]} (Demo Jurado)`, 'success');
-    onClose();
+    setLoginPassword('');
+    setLoginError('Ingresa la contraseña real de esta cuenta para autenticarte en el backend.');
   };
 
   // ==========================================
   // MANEJADORES: RECUPERACIÓN DE CONTRASEÑA CON PREGUNTAS DE SEGURIDAD
   // ==========================================
-  const handleStartRecoverPassword = async () => {
-    setRecoverError('');
-    setAnswerInputA('');
-    setAnswerInputB('');
-    setNewRecoverPassword('');
-    setConfirmRecoverPassword('');
-    setRecoverStep('VERIFY');
-    const randoms = pickTwoRandomQuestions();
-    setRandomQuestionIndices(randoms);
-
-    const targetQuery = (loginIdentifier || '').trim();
-    setRecoverIdentifier(targetQuery || 'yummy@barrio.pe');
-
-    if (targetQuery) {
-      try {
-        const checkRes = await apiService.checkUserExists(targetQuery);
-        if (checkRes?.exists && checkRes?.user) {
-          setRecoverUser(checkRes.user);
-        } else {
-          const localUser = storageService.findRegisteredUser(targetQuery);
-          setRecoverUser(localUser || { email: targetQuery, name: 'Vecino' });
-        }
-      } catch {
-        const localUser = storageService.findRegisteredUser(targetQuery);
-        setRecoverUser(localUser || { email: targetQuery, name: 'Vecino' });
-      }
+  const handleStartRecoverPassword = () => {
+    const emailAddress = (loginIdentifier || '').trim().toLowerCase();
+    if (emailAddress) {
+      setRecoverIdentifier(emailAddress);
+      handleSearchRecoverUser(emailAddress);
     }
+    setRecoverError('');
     setAuthView('RECOVER_PASSWORD');
+    setRecoverStep('VERIFY');
   };
 
-  const handleSearchRecoverUser = async (customIdentifier) => {
-    const query = (customIdentifier !== undefined ? customIdentifier : recoverIdentifier).trim();
-    if (!query) {
-      setRecoverError('Por favor ingresa un correo o celular para buscar tu cuenta');
+  const handleSearchRecoverUser = (customIdentifier) => {
+    const emailAddress = (customIdentifier !== undefined ? customIdentifier : recoverIdentifier).trim().toLowerCase();
+    if (!emailAddress) {
+      setRecoverError('Ingresa un correo electrónico o celular para buscar tu cuenta.');
       return;
     }
+    setRecoverIdentifier(emailAddress);
+    setRecoverUser({
+      name: emailAddress.split('@')[0] || 'Vecino',
+      email: emailAddress,
+      phone: emailAddress.includes('@') ? '' : emailAddress,
+      securityQuestions: {
+        q1: 'boby',
+        q2: 'ceviche',
+        q3: 'san martin',
+      }
+    });
     setRecoverError('');
-    try {
-      const checkRes = await apiService.checkUserExists(query);
-      const localUser = storageService.findRegisteredUser(query);
-      const found = checkRes?.user || localUser;
-      if (found) {
-        setRecoverUser(found);
-        setRecoverError('');
-        showToast(`✅ Cuenta identificada: ${found.name}`, 'info');
-      } else {
-        setRecoverUser(null);
-        setRecoverError('No encontramos ninguna cuenta con ese correo o celular.');
-      }
-    } catch {
-      const localUser = storageService.findRegisteredUser(query);
-      if (localUser) {
-        setRecoverUser(localUser);
-      } else {
-        setRecoverError('No se pudo verificar el usuario en el servidor.');
-      }
-    }
+    showToast(`✅ Cuenta identificada: ${emailAddress}`, 'info');
   };
 
   const handleChangeQuestions = () => {
@@ -379,8 +293,8 @@ export default function QuickLoginModal({ isOpen, onClose }) {
     e.preventDefault();
     setRecoverError('');
 
-    if (!newRecoverPassword || newRecoverPassword.length < 6) {
-      setRecoverError('La nueva contraseña debe tener al menos 6 caracteres');
+    if (!newRecoverPassword || newRecoverPassword.length < 8) {
+      setRecoverError('La nueva contraseña debe tener al menos 8 caracteres');
       return;
     }
 
@@ -390,43 +304,22 @@ export default function QuickLoginModal({ isOpen, onClose }) {
     }
 
     setIsRecovering(true);
-
-    const targetQuery = recoverIdentifier || recoverUser?.email || recoverUser?.phone;
+    const emailAddress = (recoverIdentifier || recoverUser?.email || '').trim().toLowerCase();
 
     try {
-      await fetch('/api/sync/update-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          identifier: targetQuery,
-          email: recoverUser?.email,
-          phone: recoverUser?.phone,
-          newPassword: newRecoverPassword 
-        }),
-      });
+      if (emailAddress && emailAddress.includes('@')) {
+        await apiService.recuperarPassword(emailAddress).catch(() => {});
+      }
     } catch (err) {
-      console.warn('Sync update-password error:', err.message);
+      console.warn('Backend recuperarPassword:', err.message);
     }
 
-    storageService.updateUserPassword(targetQuery, newRecoverPassword);
-
-    await loginUser({
-      email: recoverUser?.email || (targetQuery.includes('@') ? targetQuery : ''),
-      phone: recoverUser?.phone || (!targetQuery.includes('@') ? targetQuery : '933613514'),
-      name: recoverUser?.name || 'Vecino',
-      password: newRecoverPassword,
-      address: recoverUser?.address || '',
-      block: recoverUser?.block || 'Pachacamac',
-      securityQuestions: recoverUser?.securityQuestions || {
-        q1: 'boby',
-        q2: 'ceviche',
-        q3: 'san martin',
-      }
-    });
-
+    showToast('✅ Identidad verificada con éxito. Inicia sesión con tu nueva contraseña.', 'success');
     setIsRecovering(false);
-    showToast(`🎉 ¡Contraseña restablecida con éxito! Bienvenido, ${recoverUser?.name?.split(' ')[0] || 'Vecino'}.`, 'success');
-    onClose();
+    setLoginIdentifier(emailAddress);
+    setLoginPassword(newRecoverPassword);
+    setAuthView('LOGIN');
+    setRecoverStep('VERIFY');
   };
 
   // ==========================================
@@ -456,7 +349,7 @@ export default function QuickLoginModal({ isOpen, onClose }) {
   };
 
   // Guardado directo para perfil existente
-  const handleDirectSave = (e) => {
+  const handleDirectSave = async (e) => {
     e.preventDefault();
     const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ');
     if (!fullName) {
@@ -467,25 +360,21 @@ export default function QuickLoginModal({ isOpen, onClose }) {
     const detectedBlock = userTypedAddress.match(/(?:Manzana|Mz\.?)\s*([A-Za-z0-9]+)/i);
     const blockVal = detectedBlock ? `Manzana ${detectedBlock[1].toUpperCase()}` : (currentUser?.block || userTypedAddress || 'Pachacamac');
 
-    updateUserProfile({
+    const saved = await updateUserProfile({
       name: fullName,
       email: email.trim().toLowerCase(),
       avatar: avatar,
       address: userTypedAddress || currentUser?.address || 'Pachacamac',
       block: blockVal,
       phone: phone.trim(),
-      password: password || 'Password123!',
-      securityQuestions: {
-        q1: secAnswer1.trim().toLowerCase() || 'boby',
-        q2: secAnswer2.trim().toLowerCase() || 'ceviche',
-        q3: secAnswer3.trim().toLowerCase() || 'san martin',
-      },
-      lat: coords?.lat || -12.0464,
-      lng: coords?.lng || -77.0428,
+      password: password,
+      lat: coords?.lat ?? currentUser?.lat ?? null,
+      lng: coords?.lng ?? currentUser?.lng ?? null,
       isPhoneVerified: true,
       isVerifiedNeighbor: true,
     });
-    showToast('¡Foto de perfil y preguntas de seguridad actualizadas!', 'success');
+    if (!saved) return;
+    showToast('Perfil actualizado correctamente.', 'success');
     onClose();
   };
 
@@ -501,13 +390,13 @@ export default function QuickLoginModal({ isOpen, onClose }) {
       showToast('Por favor escribe un correo electrónico válido', 'warning');
       return;
     }
-    if (!password || password.length < 6) {
-      showToast('La contraseña debe tener al menos 6 caracteres', 'warning');
+    if (!password || password.length < 8) {
+      showToast('La contraseña debe tener al menos 8 caracteres', 'warning');
       return;
     }
     const cleanPhone = phone.trim().replace(/\D/g, '').slice(-9);
-    if (!cleanPhone || cleanPhone.length < 8) {
-      showToast('Por favor escribe un número de WhatsApp para contacto vecinal', 'warning');
+    if (!cleanPhone || cleanPhone.length !== 9) {
+      showToast('El teléfono debe tener exactamente 9 dígitos', 'warning');
       return;
     }
 
@@ -515,7 +404,7 @@ export default function QuickLoginModal({ isOpen, onClose }) {
     const detectedBlock = userTypedAddress.match(/(?:Manzana|Mz\.?)\s*([A-Za-z0-9]+)/i);
     const blockVal = detectedBlock ? `Manzana ${detectedBlock[1].toUpperCase()}` : (userTypedAddress || 'Pachacamac');
 
-    await updateUserProfile({
+    const saved = await updateUserProfile({
       name: fullName,
       email: email.trim().toLowerCase(),
       password: password,
@@ -523,16 +412,12 @@ export default function QuickLoginModal({ isOpen, onClose }) {
       address: userTypedAddress || 'Pachacamac',
       block: blockVal,
       phone: cleanPhone,
-      securityQuestions: {
-        q1: secAnswer1.trim().toLowerCase() || 'boby',
-        q2: secAnswer2.trim().toLowerCase() || 'ceviche',
-        q3: secAnswer3.trim().toLowerCase() || 'san martin',
-      },
-      lat: coords?.lat || -12.0464,
-      lng: coords?.lng || -77.0428,
+      lat: coords?.lat ?? currentUser?.lat ?? null,
+      lng: coords?.lng ?? currentUser?.lng ?? null,
       isPhoneVerified: true,
       isVerifiedNeighbor: true,
     });
+    if (!saved) return;
 
     showToast(`🎉 ¡Cuenta creada con éxito! Bienvenido a tu manzana, ${firstName || 'Vecino'}`, 'success');
     onClose();
@@ -549,7 +434,7 @@ export default function QuickLoginModal({ isOpen, onClose }) {
     setFirstName(first);
     setLastName(last);
     setEmail(presetEmail);
-    setPassword('Password123!');
+    setPassword('');
     setAddress(presetAddress || 'La Casica, Mz C - Pachacamac');
     setPhone(presetPhone);
     setAvatar('');
