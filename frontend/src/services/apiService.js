@@ -1,13 +1,34 @@
 /**
  * RedVecinal API Service
- * Conexión configurable entre el Frontend React y el Backend Spring Boot 3 + Supabase
- * Por defecto apunta al backend local del equipo (http://localhost:8080) o al configurado en VITE_BACKEND_URL
+ * Conexión cliente entre el Frontend React y el Backend Spring Boot 3 + Supabase
+ * Enrutamiento exclusivo por API REST oficial (/api/v1).
  */
 
 const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || '/api/v1';
 
 const TOKEN_KEY = 'redvecinal_auth_token';
 const REFRESH_KEY = 'redvecinal_refresh_token';
+
+// Mapeo de categorías del frontend a IDs de def_categoria (ECONOMIA)
+const SERVICE_CAT_MAP = {
+  gasfiteria: 1,
+  plomerie: 1,
+  electricidad: 1,
+  cerrajeria: 1,
+  carpinteria: 1,
+  hogar: 1,
+  vehiculos: 2,
+  mascotas: 3,
+  costura: 3,
+  personal: 3,
+  alimentos: 4,
+  alimentacion: 4,
+  comercio: 4,
+  tecnologia: 5,
+  clases: 6,
+  educacion: 6,
+  otros: 7,
+};
 
 class ApiService {
   constructor() {
@@ -47,10 +68,50 @@ class ApiService {
     return headers;
   }
 
-  // Todas las operaciones de negocio se realizan contra la API Spring Boot.
-  // No hay rutas alternativas /api/sync ni llamadas directas desde el navegador a Supabase.
+  // Renovación automática de token (Refresh Token rotation)
+  async refrescarSesion() {
+    const refreshToken = localStorage.getItem(REFRESH_KEY);
+    if (!refreshToken) {
+      this.clearSession();
+      return null;
+    }
+    try {
+      const res = await fetch(`${this.baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!res.ok) {
+        this.clearSession();
+        return null;
+      }
+      const data = await res.json();
+      if (data.accessToken) {
+        this.setSession(data.accessToken, data.refreshToken || refreshToken);
+        return data.accessToken;
+      }
+    } catch {
+      this.clearSession();
+    }
+    return null;
+  }
 
-  // Health check por el mismo origen; el proxy lo reenvía a Spring Boot.
+  // Petición autenticada con reintento automático ante expiración de token (401)
+  async fetchWithAuth(url, options = {}) {
+    const headers = this.getHeaders(options.headers);
+    let res = await fetch(url, { ...options, headers });
+
+    if (res.status === 401 && localStorage.getItem(REFRESH_KEY)) {
+      const nuevoToken = await this.refrescarSesion();
+      if (nuevoToken) {
+        const retryHeaders = this.getHeaders(options.headers);
+        res = await fetch(url, { ...options, headers: retryHeaders });
+      }
+    }
+    return res;
+  }
+
+  // 1. Health check del backend (Spring Boot Actuator)
   async checkHealth() {
     try {
       const response = await fetch('/actuator/health', {
@@ -70,22 +131,46 @@ class ApiService {
     const res = await fetch(`${this.baseUrl}/auth/login`, {
       method: 'POST',
       headers: this.getHeaders(),
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || data.message || 'Error al iniciar sesión');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const errorMsg = data.detail || data.message || (res.status === 401 ? 'Correo o contraseña incorrectos' : 'Error al iniciar sesión');
+      const err = new Error(errorMsg);
+      err.detail = data.detail;
+      err.codigo = data.codigo;
+      err.status = res.status;
+      throw err;
+    }
     this.setSession(data.accessToken, data.refreshToken);
     return data;
   }
 
-  async registro({ email, password, nombre, telefono, tipoCuenta = 'VECINO' }) {
+  async registro({ email, password, nombre, telefono }) {
+    const cleanPhone = telefono ? telefono.toString().replace(/\D/g, '').slice(-9) : null;
+    const bodyPayload = {
+      email: email.trim().toLowerCase(),
+      password,
+      nombre: nombre.trim(),
+    };
+    if (cleanPhone && cleanPhone.length === 9) {
+      bodyPayload.telefono = cleanPhone;
+    }
+
     const res = await fetch(`${this.baseUrl}/auth/registro`, {
       method: 'POST',
       headers: this.getHeaders(),
-      body: JSON.stringify({ email, password, nombre, telefono, tipoCuenta }),
+      body: JSON.stringify(bodyPayload),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || data.message || 'Error al registrarse');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const errorMsg = data.detail || data.message || `Error ${res.status}: ${data.codigo || 'Error al registrarse'}`;
+      const err = new Error(errorMsg);
+      err.detail = data.detail;
+      err.codigo = data.codigo;
+      err.status = res.status;
+      throw err;
+    }
     if (data.accessToken) this.setSession(data.accessToken, data.refreshToken);
     return data;
   }
@@ -94,7 +179,7 @@ class ApiService {
     const res = await fetch(`${this.baseUrl}/auth/recuperar`, {
       method: 'POST',
       headers: this.getHeaders(),
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email: email.trim().toLowerCase() }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -105,9 +190,8 @@ class ApiService {
   async logout() {
     try {
       if (this.token) {
-        await fetch(`${this.baseUrl}/auth/logout`, {
+        await this.fetchWithAuth(`${this.baseUrl}/auth/logout`, {
           method: 'POST',
-          headers: this.getHeaders(),
         });
       }
     } finally {
@@ -117,30 +201,38 @@ class ApiService {
 
   // 3. Perfil del Usuario
   async getMiPerfil() {
-    const res = await fetch(`${this.baseUrl}/usuarios/me`, {
-      headers: this.getHeaders(),
-    });
+    const res = await this.fetchWithAuth(`${this.baseUrl}/usuarios/me`);
     if (!res.ok) throw new Error('No se pudo obtener el perfil');
     return await res.json();
   }
 
   async actualizarPerfil(nombre, telefono) {
-    const res = await fetch(`${this.baseUrl}/usuarios/me`, {
+    const cleanPhone = telefono ? telefono.toString().replace(/\D/g, '').slice(-9) : null;
+    const res = await this.fetchWithAuth(`${this.baseUrl}/usuarios/me`, {
       method: 'PUT',
-      headers: this.getHeaders(),
-      body: JSON.stringify({ nombre, telefono }),
+      body: JSON.stringify({ 
+        nombre: (nombre || '').trim(), 
+        telefono: (cleanPhone && cleanPhone.length === 9) ? cleanPhone : null 
+      }),
     });
-    if (!res.ok) throw new Error('No se pudo actualizar el perfil');
-    return await res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.detail || data.message || 'No se pudo actualizar el perfil');
+      err.detail = data.detail;
+      throw err;
+    }
+    return data;
   }
 
   async actualizarUbicacion(lat, lng) {
-    const res = await fetch(`${this.baseUrl}/usuarios/me/ubicacion`, {
+    const res = await this.fetchWithAuth(`${this.baseUrl}/usuarios/me/ubicacion`, {
       method: 'PUT',
-      headers: this.getHeaders(),
-      body: JSON.stringify({ lat, lng }),
+      body: JSON.stringify({ lat: Number(lat), lng: Number(lng) }),
     });
-    if (!res.ok) throw new Error('No se pudo actualizar la ubicación');
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || data.message || 'No se pudo actualizar la ubicación');
+    }
     return await res.json();
   }
 
@@ -149,7 +241,7 @@ class ApiService {
     await this.ensureSession();
     const query = new URLSearchParams(params).toString();
     const url = `${this.baseUrl}/servicios${query ? `?${query}` : ''}`;
-    const res = await fetch(url, { headers: this.getHeaders() });
+    const res = await this.fetchWithAuth(url);
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
       throw new Error(errData.detail || errData.message || 'Error al cargar servicios');
@@ -159,14 +251,13 @@ class ApiService {
 
   async crearServicio(servicioData) {
     await this.ensureSession();
-    const res = await fetch(`${this.baseUrl}/servicios`, {
+    const res = await this.fetchWithAuth(`${this.baseUrl}/servicios`, {
       method: 'POST',
-      headers: this.getHeaders(),
       body: JSON.stringify(servicioData),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const errorMsg = data.detail || data.message || `Error ${res.status}: ${data.codigo || 'Fallo al publicar'}`;
+      const errorMsg = data.detail || data.message || `Error ${res.status}: ${data.codigo || 'Fallo al publicar servicio'}`;
       const err = new Error(errorMsg);
       err.detail = data.detail;
       err.codigo = data.codigo;
@@ -176,7 +267,6 @@ class ApiService {
     return data;
   }
 
-  // No crear cuentas demo ni credenciales automáticas. La sesión debe venir del login real.
   async ensureSession() {
     if (!this.token) {
       throw new Error('Debes iniciar sesión con una cuenta registrada para continuar.');
@@ -191,107 +281,87 @@ class ApiService {
       const list = raw.contenido || (Array.isArray(raw) ? raw : []);
       if (!list || list.length === 0) return [];
 
-      const formatted = await Promise.all(
-        list.map(async (s) => {
-          let detail = s;
-          try {
-            const dRes = await fetch(`${this.baseUrl}/servicios/${s.id}`, { headers: this.getHeaders() });
-            if (dRes.ok) {
-              detail = await dRes.json();
-            }
-          } catch {}
-
-          const cleanPhone = detail.telefonoContacto || s.telefonoContacto || '';
-          const authorName = detail.autorNombre || s.nombreComercial || s.titulo;
-
-          return {
-            id: s.id,
-            title: s.titulo,
-            category: s.categoriaNombre?.toLowerCase()?.includes('alim') ? 'oficios' : (s.categoriaNombre?.toLowerCase() || 'oficios'),
-            description: detail.descripcion || s.nombreComercial || s.titulo,
-            priceNote: detail.tarifaDetalle || (s.precioDesde ? `Desde S/ ${s.precioDesde}` : 'Precio a coordinar'),
-            author: {
-              name: authorName,
-              phone: cleanPhone,
-              block: 'Manzana C',
-              avatar: '',
-              isVerified: true,
-            },
-            distanceMeters: s.distanciaM ?? null,
-            lat: s.lat ?? null,
-            lng: s.lng ?? null,
-            endorsementsCount: s.totalValoraciones || 0,
-            endorsements: [],
-            availableInEmergency: true,
-            isAvailableNow: true,
-            isCloudSynced: true,
-            createdAt: detail.createdAt || new Date().toISOString(),
-          };
-        })
-      );
-
-      return formatted;
+      return list.map((s) => ({
+        id: s.id,
+        title: s.titulo,
+        category: s.categoriaNombre?.toLowerCase()?.includes('alim') ? 'oficios' : (s.categoriaNombre?.toLowerCase() || 'oficios'),
+        description: s.nombreComercial || s.titulo,
+        priceNote: s.precioDesde ? `Desde S/ ${s.precioDesde}` : 'Precio a coordinar por WhatsApp',
+        author: {
+          name: s.nombreComercial || s.titulo || 'Vecino',
+          phone: s.telefonoContacto || '',
+          block: s.zonaNombre || 'Vecindario',
+          avatar: '',
+          isVerified: true,
+        },
+        distanceMeters: s.distanciaM ?? null,
+        lat: s.lat ?? null,
+        lng: s.lng ?? null,
+        endorsementsCount: s.totalValoraciones || 0,
+        endorsements: [],
+        availableInEmergency: true,
+        isAvailableNow: true,
+        isCloudSynced: true,
+        createdAt: s.createdAt || new Date().toISOString(),
+      }));
     } catch (err) {
       console.warn('[Fetch Cloud Services Error]:', err.message);
       return null;
     }
   }
 
-  // Publicación a través de Spring Boot; el navegador nunca se conecta directamente a la base de datos
+  // Publicación a través de Spring Boot
   async publicarEnBackend(item, user) {
-    const cleanPhone = (user?.phone || '').replace(/\D/g, '').slice(-9);
+    await this.ensureSession();
 
-    // 1. Asegurar sesión
-    await this.ensureSession(user);
-
-    if (!this.token) {
-      throw new Error('No se pudo establecer sesión con el servidor');
-    }
-
-    // 2. Asegurar ubicación de zona en PostGIS (RF10)
+    // 1. Asegurar ubicación de zona en PostGIS (RF10)
     const lat = item.lat ?? user?.lat;
     const lng = item.lng ?? user?.lng;
     if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
-      throw new Error('Debes compartir una ubicación válida antes de publicar.');
+      throw new Error('Debes compartir una ubicación GPS válida antes de publicar.');
     }
     await this.actualizarUbicacion(Number(lat), Number(lng));
 
-    // 3. Enviar la publicación a Spring Boot
+    // 2. Extraer teléfono limpio
+    const rawPhone = user?.phone || item.author?.phone || '';
+    const cleanPhone = rawPhone.replace(/\D/g, '').slice(-9);
+
+    // 3. Enviar la publicación a Spring Boot según el tipo
     if (item.type === 'SERVICE') {
+      const catKey = (item.category || '').toString().toLowerCase().trim();
+      const catId = SERVICE_CAT_MAP[catKey] || 7; // 7 = OTROS en ECONOMIA
+
+      // Extraer precio numérico si está presente
+      const matchPrice = (item.priceNote || '').match(/(\d+(?:\.\d+)?)/);
+      const precioDesde = matchPrice ? parseFloat(matchPrice[1]) : 15.0;
+
       const payload = {
-        categoriaId: 4,
+        categoriaId: catId,
         titulo: item.title,
-        descripcion: item.description,
+        descripcion: item.description || item.title,
         nombreComercial: item.title,
-        telefonoContacto: cleanPhone,
-        precioDesde: 15.0,
+        telefonoContacto: cleanPhone.length === 9 ? cleanPhone : null,
+        precioDesde: precioDesde,
         tarifaDetalle: item.priceNote || 'Precio a coordinar por WhatsApp',
-        lat,
-        lng,
+        lat: Number(lat),
+        lng: Number(lng),
       };
-      try {
-        const created = await this.crearServicio(payload);
-        console.log('[Backend] Servicio creado correctamente.');
-        return created;
-      } catch (err) {
-        throw err;
-      }
+
+      return await this.crearServicio(payload);
+
     } else if (item.type === 'FAVOR') {
+      // El backend requiere justificación obligatoria para SOLICITUD_AYUDA
+      // y deduce la categoría automáticamente (AYUDA_GENERAL) si categoriaId es omitido.
       const payload = {
         tipo: 'SOLICITUD_AYUDA',
-        categoriaId: 4,
         titulo: item.title,
-        descripcion: item.description,
-        lat,
-        lng,
+        descripcion: item.description || item.title,
+        justificacion: item.description || item.title || 'Solicitud de apoyo vecinal',
+        lat: Number(lat),
+        lng: Number(lng),
       };
-      try {
-        const created = await this.crearSolidaridad(payload);
-        console.log('[Backend] Publicación solidaria creada correctamente.');
-        return created;
-      } catch (err) {
-        throw err;
-      }
+
+      return await this.crearSolidaridad(payload);
     }
     return null;
   }
@@ -301,45 +371,62 @@ class ApiService {
     await this.ensureSession();
     const query = new URLSearchParams(params).toString();
     const url = `${this.baseUrl}/solidaridad${query ? `?${query}` : ''}`;
-    const res = await fetch(url, { headers: this.getHeaders() });
-    if (!res.ok) throw new Error('Error al cargar favores');
+    const res = await this.fetchWithAuth(url);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || data.message || 'Error al cargar favores');
+    }
     return await res.json();
   }
 
   async crearSolidaridad(favorData) {
     await this.ensureSession();
-    const res = await fetch(`${this.baseUrl}/solidaridad`, {
+    const res = await this.fetchWithAuth(`${this.baseUrl}/solidaridad`, {
       method: 'POST',
-      headers: this.getHeaders(),
       body: JSON.stringify(favorData),
     });
-    if (!res.ok) throw new Error('Error al publicar favor');
-    return await res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const errorMsg = data.detail || data.message || `Error ${res.status}: ${data.codigo || 'Error al publicar favor'}`;
+      const err = new Error(errorMsg);
+      err.detail = data.detail;
+      err.codigo = data.codigo;
+      err.status = res.status;
+      throw err;
+    }
+    return data;
   }
 
   // 6. Módulo Emergencias (Alertas SOS en Tiempo Real)
   async getEmergencias() {
     await this.ensureSession();
-    const res = await fetch(`${this.baseUrl}/emergencias/dashboard`, {
-      headers: this.getHeaders(),
-    });
-    if (!res.ok) throw new Error('Error al cargar emergencias');
+    const res = await this.fetchWithAuth(`${this.baseUrl}/emergencias/dashboard`);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || data.message || 'Error al cargar emergencias');
+    }
     return await res.json();
   }
 
   async reportarEmergencia(emergenciaData) {
     await this.ensureSession();
-    const res = await fetch(`${this.baseUrl}/emergencias/reportes`, {
+    const res = await this.fetchWithAuth(`${this.baseUrl}/emergencias/reportes`, {
       method: 'POST',
-      headers: this.getHeaders(),
       body: JSON.stringify(emergenciaData),
     });
-    if (!res.ok) throw new Error('Error al enviar alerta de auxilio');
-    return await res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const errorMsg = data.detail || data.message || `Error ${res.status}: ${data.codigo || 'Error al enviar alerta SOS'}`;
+      const err = new Error(errorMsg);
+      err.detail = data.detail;
+      err.codigo = data.codigo;
+      err.status = res.status;
+      throw err;
+    }
+    return data;
   }
 
-  // SSE autenticado: EventSource no permite enviar Authorization Bearer,
-  // por eso se utiliza fetch + ReadableStream.
+  // SSE autenticado con ReadableStream
   crearStreamEmergencias(onNuevaEmergencia, onError) {
     const controller = new AbortController();
     const url = `${this.baseUrl}/emergencias/stream`;
@@ -368,7 +455,7 @@ class ApiService {
             try {
               onNuevaEmergencia(JSON.parse(dataLine.slice(5).trim()));
             } catch {
-              // Ignorar eventos keep-alive o mensajes no JSON.
+              // Ignorar eventos keep-alive
             }
           }
         }
