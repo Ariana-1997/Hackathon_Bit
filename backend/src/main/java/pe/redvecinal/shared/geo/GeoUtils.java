@@ -29,6 +29,15 @@ public final class GeoUtils {
         return punto(redondear(lat, decimales), redondear(lng, decimales));
     }
 
+    /**
+     * Radio de búsqueda en METROS acotado a [100 m, maxKm]. Un valor no finito (NaN/Infinity, que Spring sí
+     * convierte desde "NaN"/"Infinity") se reemplaza por el mínimo: Math.max/min propagan NaN y ST_DWithin fallaría.
+     */
+    public static double radioSeguroMetros(double radioKm, double maxKm) {
+        double km = Double.isFinite(radioKm) ? radioKm : 0.1;
+        return Math.min(Math.max(km, 0.1), maxKm) * 1000;
+    }
+
     public static Double lat(Point p) { return p == null ? null : p.getY(); }
 
     public static Double lng(Point p) { return p == null ? null : p.getX(); }

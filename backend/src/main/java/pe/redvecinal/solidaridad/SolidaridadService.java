@@ -117,8 +117,8 @@ public class SolidaridadService {
 
     @Transactional(readOnly = true)
     public List<FeedItem> cercanos(double lat, double lng, double radioKm, TipoPublicacion tipo) {
-        double radio = Math.min(Math.max(radioKm, 0.1), props.emergencias().radioMaximoKm());
-        return consultas.cercanos(lat, lng, radio * 1000, tipo == null ? null : tipo.name()).stream().map(this::aFeed).toList();
+        double radioM = GeoUtils.radioSeguroMetros(radioKm, props.emergencias().radioMaximoKm());
+        return consultas.cercanos(lat, lng, radioM, tipo == null ? null : tipo.name()).stream().map(this::aFeed).toList();
     }
 
     /** RF28: mis publicaciones solidarias por fecha. */

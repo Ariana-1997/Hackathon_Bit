@@ -3,11 +3,14 @@ package pe.redvecinal.solidaridad;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,6 +32,7 @@ import pe.redvecinal.solidaridad.SolidaridadDtos.MiInteraccionResponse;
 import pe.redvecinal.solidaridad.SolidaridadDtos.MiPublicacion;
 
 @Tag(name = "3. Cadena de favores y solidaridad")
+@Validated
 @RestController
 @RequestMapping("/api/v1/solidaridad")
 @RequiredArgsConstructor
@@ -54,7 +58,8 @@ public class SolidaridadController {
 
     @Operation(summary = "RF29 Publicaciones solidarias por cercanía")
     @GetMapping("/cercanas")
-    public List<FeedItem> cercanas(@RequestParam double lat, @RequestParam double lng,
+    public List<FeedItem> cercanas(@RequestParam @DecimalMin("-90") @DecimalMax("90") double lat,
+                                   @RequestParam @DecimalMin("-180") @DecimalMax("180") double lng,
                                    @RequestParam(defaultValue = "1") double radioKm,
                                    @RequestParam(required = false) TipoPublicacion tipo) {
         return service.cercanos(lat, lng, radioKm, tipo);

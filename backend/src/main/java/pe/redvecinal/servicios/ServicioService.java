@@ -124,8 +124,8 @@ public class ServicioService {
 
     @Transactional(readOnly = true)
     public List<ServicioResumen> cercanos(double lat, double lng, double radioKm, Integer categoriaId) {
-        double radio = Math.min(Math.max(radioKm, 0.1), props.emergencias().radioMaximoKm());
-        return consultas.cercanos(lat, lng, radio * 1000, categoriaId, 200).stream().map(this::aResumen).toList();
+        double radioM = GeoUtils.radioSeguroMetros(radioKm, props.emergencias().radioMaximoKm());
+        return consultas.cercanos(lat, lng, radioM, categoriaId, 200).stream().map(this::aResumen).toList();
     }
 
     private void aplicar(DetServicio d, ServicioRequest req) {
