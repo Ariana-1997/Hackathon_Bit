@@ -192,12 +192,7 @@ export default function QuickLoginModal({ isOpen, onClose }) {
     }
   };
 
-  // Los accesos de demostración solo rellenan el formulario; nunca autentican sin validar en Spring Boot.
-  const handleQuickLoginPreset = (presetEmail) => {
-    setLoginIdentifier(presetEmail);
-    setLoginPassword('');
-    setLoginError('Ingresa la contraseña real de esta cuenta para autenticarte en el backend.');
-  };
+
 
   // ==========================================
   // MANEJADORES: RECUPERACIÓN DE CONTRASEÑA CON PREGUNTAS DE SEGURIDAD
@@ -429,18 +424,7 @@ export default function QuickLoginModal({ isOpen, onClose }) {
     onClose();
   };
 
-  const loadPreset = (presetName, presetEmail, presetAddress, presetBlock, presetPhone) => {
-    const { first, last } = splitFullName(presetName);
-    setFirstName(first);
-    setLastName(last);
-    setEmail(presetEmail);
-    setPassword('');
-    setAddress(presetAddress || 'La Casica, Mz C - Pachacamac');
-    setPhone(presetPhone);
-    setAvatar('');
-    setCoords({ lat: -12.0464, lng: -77.0428 });
-    setIsGpsLocated(true);
-  };
+
 
   return (
     <div 
@@ -634,39 +618,6 @@ export default function QuickLoginModal({ isOpen, onClose }) {
                   </>
                 )}
               </button>
-
-              {/* ATAJOS RÁPIDOS PARA EL PITCH / DEMO DEL JURADO */}
-              <div className="pt-2 border-t border-slate-100">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1.5 text-center">
-                  Cuentas de prueba para el jurado (1 toque):
-                </span>
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLoginPreset('renato@barrio.pe', 'Renato Solis', '961024198')}
-                    className="py-2 px-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 hover:border-blue-400 text-[10px] font-bold text-blue-900 border border-blue-200 transition-all text-center truncate"
-                    title="Renato Solis (renato@barrio.pe)"
-                  >
-                    👤 Renato S.
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLoginPreset('yummy@barrio.pe', 'Yummy Untiveros', '933613514')}
-                    className="py-2 px-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-400 text-[10px] font-bold text-emerald-900 border border-emerald-200 transition-all text-center truncate"
-                    title="Yummy Untiveros (yummy@barrio.pe)"
-                  >
-                    👤 Yummy U.
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLoginPreset('carlos.mendoza@barrio.pe', 'Carlos Mendoza', '987654321')}
-                    className="py-2 px-1.5 rounded-xl bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 text-[10px] font-bold text-slate-700 border border-slate-200 transition-all text-center truncate"
-                    title="Carlos Mendoza (carlos.mendoza@barrio.pe)"
-                  >
-                    👤 Carlos M.
-                  </button>
-                </div>
-              </div>
 
               {/* Divisor Visual Clásico */}
               <div className="relative my-3 flex items-center justify-center">
@@ -1226,31 +1177,6 @@ export default function QuickLoginModal({ isOpen, onClose }) {
                   </div>
                 )}
               </div>
-
-              {/* Atajos para el Pitch / Demo */}
-              {authView === 'REGISTER' && (
-                <div className="pt-1">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
-                    Atajos para el pitch / demo:
-                  </span>
-                  <div className="flex space-x-1.5">
-                    <button
-                      type="button"
-                      onClick={() => loadPreset('Renato Solis', 'renato@barrio.pe', 'La Casica - Pachacamac', 'Manzana C', '961024198')}
-                      className="flex-1 py-1.5 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-[10px] font-bold text-emerald-900 border border-emerald-200 transition-colors"
-                    >
-                      Renato (Pachacamac)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => loadPreset('Doña Rosa Quispe', 'dona.rosa@barrio.pe', 'Pasaje San Martín 12', 'Manzana A', '911222333')}
-                      className="flex-1 py-1.5 px-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-[10px] font-bold text-slate-700 border border-slate-200 transition-colors"
-                    >
-                      Doña Rosa (Mz A)
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {/* Botón de acción */}
               {authView === 'PROFILE' ? (
