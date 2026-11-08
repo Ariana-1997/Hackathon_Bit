@@ -7,13 +7,12 @@ import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
 /**
- * Convierte el JWT de Supabase (sub = auth.users.id) en el usuario de negocio con su rol (RF02, RNF-14).
- * El rol NO se toma del token: se lee de mae_usuario, que es la fuente de verdad.
+ * Convierte el JWT de Supabase (sub = auth.users.id) en el usuario de negocio (RNF-14).
+ * No hay roles: todo usuario con perfil activo tiene el mismo nivel de acceso.
  */
 @Component
 @RequiredArgsConstructor
@@ -29,7 +28,6 @@ public class SupabaseJwtAuthenticationConverter implements Converter<Jwt, Abstra
         if (!usuario.activo()) {
             throw new DisabledException("Cuenta suspendida");
         }
-        return new UsuarioAuthenticationToken(usuario, jwt,
-                List.of(new SimpleGrantedAuthority("ROLE_" + usuario.rol().name())));
+        return new UsuarioAuthenticationToken(usuario, jwt, List.of());
     }
 }

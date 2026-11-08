@@ -66,7 +66,7 @@ public class SolidaridadService {
                 if (!existente.get().getAutorId().equals(yo.id())) {
                     throw ApiException.conflicto("ID_EN_USO", "El identificador enviado ya está en uso.");
                 }
-                return detalle(req.id());
+                return detalle(req.id(), yo.id());
             }
         }
         reglas.validar(req, yo.id());
@@ -103,9 +103,10 @@ public class SolidaridadService {
     }
 
     @Transactional(readOnly = true)
-    public Detalle detalle(UUID id) {
+    public Detalle detalle(UUID id, UUID lectorId) {
         DetSolidaridad d = detalles.buscarDetalle(id).orElseThrow(() -> ApiException.noEncontrado("La publicación"));
         Publicacion p = d.getPublicacion();
+        publicacionService.exigirVisible(p, lectorId);
         return aDetalle(d, p, usuarios.buscarNombre(p.getAutorId()).orElse(null));
     }
 
@@ -169,7 +170,7 @@ public class SolidaridadService {
     public List<InteraccionResponse> interaccionesDe(UsuarioAutenticado yo, UUID publicacionId) {
         Publicacion p = publicaciones.findByIdAndDeletedAtIsNull(publicacionId)
                 .orElseThrow(() -> ApiException.noEncontrado("La publicación"));
-        yo.exigirDuenioOAdmin(p.getAutorId());
+        yo.exigirDuenio(p.getAutorId());
         return interacciones.listarDePublicacion(publicacionId);
     }
 
@@ -231,14 +232,14 @@ public class SolidaridadService {
     @Transactional
     public void cancelar(UsuarioAutenticado yo, UUID publicacionId) {
         Publicacion p = publicacionService.cargar(publicacionId, ModuloPublicacion.SOLIDARIDAD);
-        yo.exigirDuenioOAdmin(p.getAutorId());
+        yo.exigirDuenio(p.getAutorId());
         publicacionService.cambiarEstado(p, EstadoPublicacion.CANCELADA, yo.id(), null);
     }
 
     @Transactional
     public void eliminar(UsuarioAutenticado yo, UUID publicacionId) {
         Publicacion p = publicacionService.cargar(publicacionId, ModuloPublicacion.SOLIDARIDAD);
-        yo.exigirDuenioOAdmin(p.getAutorId());
+        yo.exigirDuenio(p.getAutorId());
         publicacionService.darDeBaja(p, yo.id(), null);
     }
 

@@ -5,7 +5,6 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.Set;
 import java.util.UUID;
-import pe.redvecinal.usuarios.domain.RolUsuario;
 
 public final class PerfilDtos {
 
@@ -13,7 +12,7 @@ public final class PerfilDtos {
 
     public record ZonaResumen(UUID id, String codigo, String nombre) {}
 
-    public record PerfilResponse(UUID id, String nombre, String telefono, RolUsuario rol, ZonaResumen zona,
+    public record PerfilResponse(UUID id, String nombre, String telefono, ZonaResumen zona,
                                  Double lat, Double lng, boolean tutorialCompletado, Set<ModuloApp> modulos,
                                  Long version) {}
 

@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.locationtech.jts.geom.Point;
 
-/** Ubicación EXACTA y datos de personas vulnerables (RF32, RF33). Solo ADMIN (RNF-20). */
+/** Ubicación EXACTA y datos de personas vulnerables (RF32, RF33). No se expone por la API (RNF-20). */
 @Entity
 @Table(name = "det_reporte_datos_sensibles")
 @Getter

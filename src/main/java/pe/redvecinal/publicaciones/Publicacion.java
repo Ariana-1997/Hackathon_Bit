@@ -110,4 +110,9 @@ public class Publicacion {
     }
 
     public boolean eliminada() { return deletedAt != null; }
+
+    /** Una publicación ocultada por la comunidad solo la sigue viendo su autor. */
+    public boolean visiblePara(UUID usuarioId) {
+        return estado != EstadoPublicacion.MODERADA || autorId.equals(usuarioId);
+    }
 }

@@ -72,9 +72,9 @@ public class PerfilService {
     private PerfilResponse aResponse(Usuario u) {
         ZonaResumen zona = u.getZonaId() == null ? null
                 : zonas.findById(u.getZonaId()).map(z -> new ZonaResumen(z.getId(), z.getCodigo(), z.getNombre())).orElse(null);
-        return new PerfilResponse(u.getId(), u.getNombre(), u.getTelefono(), u.getRol(), zona,
+        return new PerfilResponse(u.getId(), u.getNombre(), u.getTelefono(), zona,
                 GeoUtils.lat(u.getUbicacion()), GeoUtils.lng(u.getUbicacion()), u.isTutorialCompletado(),
-                ModuloApp.para(u.getRol()), u.getVersion());
+                ModuloApp.todos(), u.getVersion());
     }
 
     @Transactional(readOnly = true)

@@ -71,13 +71,6 @@ public class ValoracionService {
         cargarPropia(yo, valoracionId).setDeletedAt(OffsetDateTime.now());
     }
 
-    /** Moderación de reseñas (RF47). El trigger excluye las ocultas del promedio. */
-    @Transactional
-    public void ocultar(UUID valoracionId) {
-        repository.findByIdAndDeletedAtIsNull(valoracionId)
-                .orElseThrow(() -> ApiException.noEncontrado("La valoración")).setOculta(true);
-    }
-
     @Transactional(readOnly = true)
     public PageResponse<ValoracionResponse> listar(UUID servicioId, Pageable pageable) {
         return PageResponse.de(repository.listarVisibles(servicioId, pageable));

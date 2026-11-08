@@ -18,7 +18,3 @@ on conflict (id) do nothing;
 insert into def_contacto_soporte (nombre, descripcion, telefono, orden) values
   ('Emergencias', 'Central de emergencias', '105', 1),
   ('Bomberos', 'Cuerpo de bomberos', '116', 2);
-
--- 4) Convertir un usuario ya registrado en administrador (rol_id = 3)
--- update mae_usuario set rol_id = 3
--- where auth_user_id = (select id from auth.users where email = 'admin@tu-dominio.pe');

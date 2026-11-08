@@ -1,7 +1,6 @@
 package pe.redvecinal.usuarios.domain;
 
 import jakarta.persistence.Column;
-import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -36,10 +35,6 @@ public class Usuario {
 
     @Column(name = "auth_user_id", nullable = false, unique = true, updatable = false)
     private UUID authUserId;
-
-    @Convert(converter = RolUsuarioConverter.class)
-    @Column(name = "rol_id", nullable = false)
-    private RolUsuario rol = RolUsuario.VECINO;
 
     @Column(nullable = false, length = 120)
     private String nombre;
@@ -82,13 +77,12 @@ public class Usuario {
     @Column(name = "deleted_at")
     private OffsetDateTime deletedAt;
 
-    public static Usuario nuevo(UUID authUserId, String nombre, String telefono, RolUsuario rol) {
+    public static Usuario nuevo(UUID authUserId, String nombre, String telefono) {
         Usuario u = new Usuario();
         u.id = UUID.randomUUID();
         u.authUserId = authUserId;
         u.nombre = nombre;
         u.telefono = telefono;
-        u.rol = rol;
         return u;
     }
 

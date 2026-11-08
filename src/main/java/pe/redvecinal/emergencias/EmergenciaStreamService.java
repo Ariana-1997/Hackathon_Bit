@@ -25,16 +25,12 @@ import pe.redvecinal.shared.config.AppProperties;
 @RequiredArgsConstructor
 public class EmergenciaStreamService {
 
-    /** Clave null-safe para administradores globales (ven todas las zonas). */
-    private static final UUID TODAS = new UUID(0, 0);
-
     private final Map<UUID, Set<SseEmitter>> suscriptores = new ConcurrentHashMap<>();
     private final AppProperties props;
 
     public SseEmitter suscribir(UUID zonaId) {
-        UUID clave = zonaId == null ? TODAS : zonaId;
         SseEmitter emitter = new SseEmitter(props.emergencias().sseTimeoutMs());
-        Set<SseEmitter> set = suscriptores.computeIfAbsent(clave, k -> ConcurrentHashMap.newKeySet());
+        Set<SseEmitter> set = suscriptores.computeIfAbsent(zonaId, k -> ConcurrentHashMap.newKeySet());
         set.add(emitter);
         Runnable quitar = () -> set.remove(emitter);
         emitter.onCompletion(quitar);
@@ -48,7 +44,6 @@ public class EmergenciaStreamService {
     public void alActualizarReporte(ReporteActualizadoEvent e) {
         EventoDashboard payload = new EventoDashboard(e.evento(), e.reporte());
         difundir(suscriptores.get(e.zonaId()), payload);
-        difundir(suscriptores.get(TODAS), payload);
     }
 
     /** Mantiene viva la conexión a través de proxies (comentario SSE cada 25 s). */

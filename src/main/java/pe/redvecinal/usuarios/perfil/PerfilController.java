@@ -26,7 +26,7 @@ public class PerfilController {
 
     private final PerfilService perfilService;
 
-    @Operation(summary = "RF02 Perfil del usuario con su rol y los módulos que puede ver")
+    @Operation(summary = "RF02 Perfil del usuario y los módulos que puede ver")
     @GetMapping("/usuarios/me")
     public PerfilResponse yo(@AuthenticationPrincipal UsuarioAutenticado yo) {
         return perfilService.obtener(yo.id());

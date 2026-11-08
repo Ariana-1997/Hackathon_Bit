@@ -3,7 +3,6 @@ package pe.redvecinal.emergencias;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -41,35 +40,8 @@ public final class EmergenciaDtos {
                                  PrioridadEmergencia prioridad, EstadoReporte estado, UUID responsableId,
                                  OffsetDateTime createdAt, OffsetDateTime cerradoEn, String motivoCierre, Long version) {}
 
-    /** Solo ADMIN. */
-    public record DatosSensiblesResponse(UUID reporteId, UUID reportanteId, Double latExacta, Double lngExacta,
-                                         String direccionTexto, String nombrePersona, String contacto,
-                                         String detalleVulnerabilidad) {}
-
-    public record CambiarEstadoRequest(@NotNull EstadoReporte estado, @Size(max = 500) String motivo) {}
-
     /** RF39: cierre formal. */
     public record AtenderRequest(@NotBlank(message = "Describe cómo se atendió") @Size(max = 500) String motivo) {}
-
-    public record RecursoRequest(
-            @NotNull(message = "Elige la categoría") Integer categoriaId,
-            @NotBlank @Size(max = 300) String descripcion,
-            @Size(max = 30) String unidad,
-            @NotNull @Min(value = 0, message = "No puede ser negativo") Integer cantidadTotal,
-            @NotBlank(message = "Indica el almacén") @Size(max = 255) String almacenTexto,
-            UUID zonaId) {}
-
-    public record RecursoResponse(UUID id, UUID zonaId, Integer categoriaId, String categoriaNombre, String descripcion,
-                                  String unidad, int cantidadTotal, int cantidadDisponible, String almacenTexto,
-                                  Long version) {}
-
-    public record AsignarRequest(UUID id, @NotNull UUID recursoId,
-                                 @NotNull @Positive(message = "La cantidad debe ser mayor a 0") Integer cantidad) {}
-
-    public record AsignacionResponse(UUID id, UUID reporteId, UUID recursoId, int cantidad, EstadoAsignacion estado,
-                                     OffsetDateTime createdAt) {}
-
-    public record CambiarAsignacionRequest(@NotNull EstadoAsignacion estado) {}
 
     /** Evento que viaja por SSE al dashboard. */
     public record EventoDashboard(String evento, ReportePublico reporte) {}

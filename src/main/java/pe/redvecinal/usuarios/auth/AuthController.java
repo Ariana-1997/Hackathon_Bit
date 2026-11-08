@@ -34,7 +34,7 @@ public class AuthController {
         return authService.login(req);
     }
 
-    @Operation(summary = "Registrar vecino o prestador")
+    @Operation(summary = "Registrar usuario")
     @PostMapping("/registro")
     @ResponseStatus(HttpStatus.CREATED)
     public Map<String, UUID> registrar(@Valid @RequestBody RegistroRequest req) {

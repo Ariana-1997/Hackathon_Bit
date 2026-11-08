@@ -12,9 +12,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
-import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
-import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -38,10 +35,9 @@ import pe.redvecinal.shared.config.AppProperties;
 
 /**
  * API sin estado protegida con los JWT de Supabase Auth (RNF-13, RNF-17).
- * Autorización por rol en URL (/admin/**) y por método con @PreAuthorize (RNF-14).
+ * Sin roles: fuera de los endpoints públicos basta con estar autenticado (RNF-14).
  */
 @Configuration
-@EnableMethodSecurity
 public class SecurityConfig {
 
     private static final String[] PUBLICOS = {
@@ -69,7 +65,6 @@ public class SecurityConfig {
                     .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()  // SSE y errores
                     .requestMatchers(PUBLICOS).permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/zonas").permitAll()
-                    .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")   // RF08
                     .anyRequest().authenticated())
             .oauth2ResourceServer(o -> o
                     .jwt(j -> j.jwtAuthenticationConverter(converter))
@@ -99,15 +94,6 @@ public class SecurityConfig {
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 JwtValidators.createDefaultWithIssuer(sb.authUrl()), audiencia));
         return decoder;
-    }
-
-    /** PRESTADOR incluye los permisos de VECINO (según def_rol). ADMIN también puede actuar como vecino. */
-    @Bean
-    static RoleHierarchy roleHierarchy() {
-        return RoleHierarchyImpl.fromHierarchy("""
-                ROLE_ADMIN > ROLE_VECINO
-                ROLE_PRESTADOR > ROLE_VECINO
-                """);
     }
 
     @Bean

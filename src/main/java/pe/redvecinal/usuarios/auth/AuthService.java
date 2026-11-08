@@ -16,7 +16,6 @@ import pe.redvecinal.usuarios.auth.AuthDtos.LoginRequest;
 import pe.redvecinal.usuarios.auth.AuthDtos.RegistroRequest;
 import pe.redvecinal.usuarios.auth.AuthDtos.SesionResponse;
 import pe.redvecinal.usuarios.domain.EstadoUsuario;
-import pe.redvecinal.usuarios.domain.RolUsuario;
 import pe.redvecinal.usuarios.domain.Usuario;
 import pe.redvecinal.usuarios.perfil.PerfilService;
 import pe.redvecinal.usuarios.repository.UsuarioRepository;
@@ -60,7 +59,7 @@ public class AuthService {
                 "Tu cuenta no tiene un perfil en la comunidad. Regístrate desde la aplicación."));
         if (u.getEstado() == EstadoUsuario.SUSPENDIDO) {
             supabase.cerrarSesion(sesion.accessToken());
-            throw ApiException.prohibido("Tu cuenta está suspendida. Comunícate con el administrador.");
+            throw ApiException.prohibido("Tu cuenta está suspendida. Comunícate con soporte.");
         }
         if (u.getIntentosFallidos() > 0 || u.getBloqueadoHasta() != null) {
             usuarios.reiniciarIntentos(u.getId());
@@ -72,10 +71,9 @@ public class AuthService {
     /** Alta en Supabase Auth + perfil en mae_usuario. Si el perfil falla, se compensa borrando el usuario de Auth. */
     public UUID registrar(RegistroRequest req) {
         UUID authUserId = supabase.registrar(req.email(), req.password());
-        RolUsuario rol = req.tipoCuenta() == AuthDtos.TipoCuenta.PRESTADOR ? RolUsuario.PRESTADOR : RolUsuario.VECINO;
         try {
             return tx.execute(status -> usuarios.save(
-                    Usuario.nuevo(authUserId, req.nombre().trim(), req.telefono(), rol)).getId());
+                    Usuario.nuevo(authUserId, req.nombre().trim(), req.telefono())).getId());
         } catch (RuntimeException e) {
             log.error("Fallo al crear el perfil; se revierte el alta en Supabase Auth", e);
             supabase.eliminarUsuario(authUserId);

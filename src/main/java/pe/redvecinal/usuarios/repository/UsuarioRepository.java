@@ -10,7 +10,6 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 import pe.redvecinal.shared.security.UsuarioAutenticado;
 import pe.redvecinal.usuarios.domain.EstadoUsuario;
-import pe.redvecinal.usuarios.domain.RolUsuario;
 import pe.redvecinal.usuarios.domain.Usuario;
 
 public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
@@ -19,7 +18,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
 
     /** Datos mínimos para autorizar cada petición (se cachean). */
     @Query("""
-           select new pe.redvecinal.shared.security.UsuarioAutenticado(u.id, u.authUserId, u.rol, u.zonaId, u.estado)
+           select new pe.redvecinal.shared.security.UsuarioAutenticado(u.id, u.authUserId, u.zonaId, u.estado)
            from Usuario u where u.authUserId = :authUserId and u.deletedAt is null
            """)
     Optional<UsuarioAutenticado> buscarPerfilSeguridad(@Param("authUserId") UUID authUserId);
@@ -55,16 +54,16 @@ public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
     @Query("select u.nombre from Usuario u where u.id = :id")
     Optional<String> buscarNombre(@Param("id") UUID id);
 
-    /** Administradores de la zona o globales (zona nula): destinatarios de alertas (RF31, RF48). */
-    default List<UUID> buscarAdminsDeZona(UUID zonaId) {
-        return buscarIdsPorRolEnZona(RolUsuario.ADMIN, EstadoUsuario.ACTIVO, zonaId);
+    /** Vecinos activos de la zona, salvo el indicado: destinatarios de alertas de emergencia (RF31, RF48). */
+    default List<UUID> buscarVecinosDeZona(UUID zonaId, UUID excluirId) {
+        return buscarIdsActivosDeZona(EstadoUsuario.ACTIVO, zonaId, excluirId);
     }
 
     @Query("""
            select u.id from Usuario u
-           where u.rol = :rol and u.estado = :estado and u.deletedAt is null
-             and (u.zonaId = :zonaId or u.zonaId is null)
+           where u.estado = :estado and u.deletedAt is null
+             and u.zonaId = :zonaId and u.id <> :excluirId
            """)
-    List<UUID> buscarIdsPorRolEnZona(@Param("rol") RolUsuario rol, @Param("estado") EstadoUsuario estado,
-                                     @Param("zonaId") UUID zonaId);
+    List<UUID> buscarIdsActivosDeZona(@Param("estado") EstadoUsuario estado, @Param("zonaId") UUID zonaId,
+                                      @Param("excluirId") UUID excluirId);
 }

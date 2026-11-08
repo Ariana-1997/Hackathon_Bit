@@ -90,6 +90,8 @@ app:
   emergencias:
     sse-timeout-ms: 1800000                  # 30 min por conexión del dashboard (RF35)
     radio-maximo-km: 20
+  moderacion:
+    denuncias-para-ocultar: ${DENUNCIAS_PARA_OCULTAR:3}   # RF47: ocultamiento automático
 
 springdoc:
   api-docs:

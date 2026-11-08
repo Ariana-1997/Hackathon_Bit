@@ -49,7 +49,7 @@ public class ServicioService {
                 if (!existente.get().getAutorId().equals(yo.id())) {
                     throw ApiException.conflicto("ID_EN_USO", "El identificador enviado ya está en uso.");
                 }
-                return detalle(req.id());
+                return detalle(req.id(), yo.id());
             }
         }
         catalogo.validar(req.categoriaId(), AmbitoCategoria.ECONOMIA);
@@ -83,14 +83,11 @@ public class ServicioService {
         return aDetalle(d, p);
     }
 
-    /** RF14: activar / desactivar sin borrar. Autor o administrador. */
+    /** RF14: activar / desactivar sin borrar. Solo el autor. */
     @Transactional
     public void cambiarEstado(UsuarioAutenticado yo, UUID id, boolean activo) {
         Publicacion p = publicacionService.cargar(id, ModuloPublicacion.ECONOMIA);
-        yo.exigirDuenioOAdmin(p.getAutorId());
-        if (p.getEstado() == EstadoPublicacion.MODERADA && !yo.esAdmin()) {
-            throw ApiException.prohibido("Esta publicación fue moderada por un administrador.");
-        }
+        yo.exigirDuenio(p.getAutorId());
         publicacionService.cambiarEstado(p, activo ? EstadoPublicacion.ACTIVA : EstadoPublicacion.INACTIVA, yo.id(), null);
     }
 
@@ -98,13 +95,14 @@ public class ServicioService {
     @Transactional
     public void eliminar(UsuarioAutenticado yo, UUID id) {
         Publicacion p = publicacionService.cargar(id, ModuloPublicacion.ECONOMIA);
-        yo.exigirDuenioOAdmin(p.getAutorId());
+        yo.exigirDuenio(p.getAutorId());
         publicacionService.darDeBaja(p, yo.id(), null);
     }
 
     @Transactional(readOnly = true)
-    public ServicioDetalle detalle(UUID id) {
+    public ServicioDetalle detalle(UUID id, UUID lectorId) {
         DetServicio d = detalles.buscarDetalle(id).orElseThrow(() -> ApiException.noEncontrado("El servicio"));
+        publicacionService.exigirVisible(d.getPublicacion(), lectorId);
         return aDetalle(d, d.getPublicacion());
     }
 

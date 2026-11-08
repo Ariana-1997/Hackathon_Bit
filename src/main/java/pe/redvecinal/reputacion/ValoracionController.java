@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import pe.redvecinal.reputacion.ValoracionDtos.OcultarRequest;
 import pe.redvecinal.reputacion.ValoracionDtos.ValoracionRequest;
 import pe.redvecinal.reputacion.ValoracionDtos.ValoracionResponse;
 import pe.redvecinal.shared.security.UsuarioAutenticado;
@@ -59,10 +58,4 @@ public class ValoracionController {
         service.eliminar(yo, id);
     }
 
-    @Operation(summary = "Admin RF47: ocultar una reseña inapropiada")
-    @PostMapping("/api/v1/admin/valoraciones/{id}/ocultar")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void ocultar(@PathVariable UUID id, @Valid @RequestBody OcultarRequest req) {
-        service.ocultar(id);
-    }
 }

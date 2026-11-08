@@ -5,7 +5,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * RF34: clasificación automática por prioridad. Regla por puntaje, explicable y fácil de ajustar
- * con los vecinos/administradores. Cubierta por PrioridadCalculatorTest.
+ * con los vecinos. Cubierta por PrioridadCalculatorTest.
  */
 @Component
 public class PrioridadCalculator {

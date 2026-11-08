@@ -7,13 +7,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import pe.redvecinal.catalogo.AmbitoCategoria;
 import pe.redvecinal.catalogo.CatalogoService;
 import pe.redvecinal.catalogo.CategoriaCache.CategoriaInfo;
 import pe.redvecinal.emergencias.EmergenciaDtos.CrearReporteRequest;
-import pe.redvecinal.emergencias.EmergenciaDtos.DatosSensiblesResponse;
 import pe.redvecinal.emergencias.EmergenciaDtos.ReportePublico;
 import pe.redvecinal.notificaciones.NotificacionService;
 import pe.redvecinal.notificaciones.TipoNotificacion;
@@ -26,7 +24,7 @@ import pe.redvecinal.shared.security.UsuarioAutenticado;
 import pe.redvecinal.shared.web.PageResponse;
 import pe.redvecinal.usuarios.repository.UsuarioRepository;
 
-/** Módulo 4 - Ayuda humanitaria y emergencias (RF31 a RF35, RF38 a RF40). */
+/** Módulo 4 - Ayuda humanitaria y emergencias (RF31 a RF35, RF39). */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -88,8 +86,8 @@ public class ReporteService {
         sensibles.save(s);
 
         historial.registrar(EntidadHistorial.REPORTE, r.getId(), null, r.getEstado(), yo.id(), "Reporte creado");
-        List<UUID> admins = usuarios.buscarAdminsDeZona(r.getZonaId());
-        notificaciones.notificarVarios(admins, TipoNotificacion.NUEVA_ALERTA_EMERGENCIA,
+        List<UUID> vecinos = usuarios.buscarVecinosDeZona(r.getZonaId(), yo.id());
+        notificaciones.notificarVarios(vecinos, TipoNotificacion.NUEVA_ALERTA_EMERGENCIA,
                 "Nueva " + (r.getTipo() == TipoReporte.ALERTA_EMERGENCIA ? "alerta" : "necesidad crítica")
                         + " (" + r.getPrioridad() + ")", categoria.nombre(), ENTIDAD, r.getId());
 
@@ -114,65 +112,15 @@ public class ReporteService {
         return PageResponse.de(reportes.findByReportanteIdOrderByCreatedAtDesc(yoId, pageable), this::aPublico);
     }
 
-    /** RNF-20: datos identificables y ubicación exacta, solo ADMIN. Cada acceso queda en el log. */
-    @Transactional(readOnly = true)
-    public DatosSensiblesResponse datosSensibles(UsuarioAutenticado admin, UUID reporteId) {
-        ReporteHumanitario r = cargar(reporteId);
-        ReporteDatosSensibles s = sensibles.findById(reporteId).orElseThrow(() -> ApiException.noEncontrado("El detalle"));
-        log.info("AUDITORIA acceso a datos sensibles reporte={} admin={}", reporteId, admin.id());
-        return new DatosSensiblesResponse(reporteId, r.getReportanteId(), GeoUtils.lat(s.getUbicacionExacta()),
-                GeoUtils.lng(s.getUbicacionExacta()), s.getDireccionTexto(), s.getNombrePersona(), s.getContacto(),
-                s.getDetalleVulnerabilidad());
-    }
-
-    /** Admin: tomar la atención, reabrir o descartar (RF37/RF38). */
-    @Transactional
-    public ReportePublico cambiarEstado(UsuarioAutenticado admin, UUID id, EstadoReporte nuevo, String motivo) {
-        ReporteHumanitario r = cargar(id);
-        if (nuevo == EstadoReporte.EN_ATENCION && r.getResponsableId() == null) {
-            r.setResponsableId(admin.id());
-        }
-        transicionar(r, nuevo, admin.id(), motivo);
-        return aPublico(r);
-    }
-
-    /** RF39: cierre formal como 'Atendida' por el administrador o el propio reportante. */
+    /** RF39: cierre formal como 'Atendida' por el propio reportante. */
     @Transactional
     public ReportePublico atender(UsuarioAutenticado yo, UUID id, String motivo) {
         ReporteHumanitario r = cargar(id);
-        if (!yo.esAdmin() && !r.getReportanteId().equals(yo.id())) {
-            throw ApiException.prohibido("Solo el administrador o quien reportó puede cerrar la necesidad.");
+        if (!r.getReportanteId().equals(yo.id())) {
+            throw ApiException.prohibido("Solo quien reportó puede cerrar la necesidad.");
         }
         transicionar(r, EstadoReporte.ATENDIDA, yo.id(), motivo);
         return aPublico(r);
-    }
-
-    /** RF38: cambio automático (usado al asignar el primer recurso). */
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void pasarAEnAtencionSiAbierta(ReporteHumanitario r, UUID actorId) {
-        if (r.getEstado() == EstadoReporte.ABIERTA) {
-            if (r.getResponsableId() == null) {
-                r.setResponsableId(actorId);
-            }
-            transicionar(r, EstadoReporte.EN_ATENCION, actorId, "Automático: se asignaron recursos");
-        }
-    }
-
-    /** RF40: traza inalterable de una alerta. */
-    @Transactional(readOnly = true)
-    public List<HistorialService.Item> historial(UUID id) {
-        cargar(id);
-        return historial.listar(EntidadHistorial.REPORTE, id);
-    }
-
-    @Transactional(readOnly = true)
-    public PageResponse<ReportePublico> cerrados(UUID zonaId, Pageable pageable) {
-        return PageResponse.de(reportes.cerrados(zonaId, pageable), this::aPublico);
-    }
-
-    @Transactional(propagation = Propagation.MANDATORY)
-    public ReporteHumanitario cargarParaActualizar(UUID id) {
-        return cargar(id);
     }
 
     private void transicionar(ReporteHumanitario r, EstadoReporte nuevo, UUID actorId, String motivo) {
@@ -185,10 +133,6 @@ public class ReporteService {
         }
         EstadoReporte anterior = r.transicionar(nuevo, actorId, motivo);
         historial.registrar(EntidadHistorial.REPORTE, r.getId(), anterior, nuevo, actorId, motivo);   // RNF-27
-        if (!r.getReportanteId().equals(actorId)) {
-            notificaciones.notificar(r.getReportanteId(), TipoNotificacion.CAMBIO_ESTADO_REPORTE,
-                    "Tu reporte cambió de estado", "Ahora está: " + nuevo, ENTIDAD, r.getId());
-        }
         eventos.publishEvent(new ReporteActualizadoEvent(r.getZonaId(), "ESTADO", aPublico(r)));
     }
 

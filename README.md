@@ -16,8 +16,16 @@ API REST de la PWA comunitaria: servicios de proximidad, cadena de favores y coo
 
 ## Documentación
 
-- [Guía paso a paso](docs/GUIA_PASO_A_PASO.md): decisiones, estructura, seguridad, orden de implementación, offline, despliegue.
-- [Matriz de trazabilidad](docs/TRAZABILIDAD.md): cada RF/RNF con su endpoint, clase y tabla.
+- API: Swagger UI en `/swagger-ui.html` (contrato OpenAPI en `/v3/api-docs`).
+- Esquema de BD: migraciones Flyway en [src/main/resources/db/migration](src/main/resources/db/migration).
+- Datos de arranque: [docs/sql/datos_iniciales.sql](docs/sql/datos_iniciales.sql).
+- Prueba de carga: [docs/carga/k6-catalogo.js](docs/carga/k6-catalogo.js).
+
+## Permisos y moderación
+
+- No hay roles: fuera de los endpoints públicos basta con estar autenticado; solo el autor modifica lo suyo.
+- Moderación comunitaria: una publicación que acumula `DENUNCIAS_PARA_OCULTAR` denuncias pendientes
+  (por defecto 3, de vecinos distintos) pasa a `MODERADA`, deja de ser visible para los demás y se avisa al autor.
 
 ## Estructura
 
@@ -31,8 +39,8 @@ pe.redvecinal
 ├── reputacion/      Módulo 5: valoraciones
 ├── solidaridad/     Módulo 3: cadena de favores
 ├── archivos/        fotos (Supabase Storage, URLs firmadas)
-├── emergencias/     Módulo 4: alertas, recursos, dashboard en tiempo real (SSE)
-├── moderacion/      Módulo 5: denuncias y moderación
+├── emergencias/     Módulo 4: alertas y dashboard en tiempo real (SSE)
+├── moderacion/      Módulo 5: denuncias y ocultamiento automático
 └── notificaciones/  Módulo 5: bandeja y push
 ```
 

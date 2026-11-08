@@ -17,7 +17,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-/** Denuncias y moderación (det_denuncia). RF46, RF47. */
+/** Denuncias y moderación comunitaria (det_denuncia). RF46, RF47. */
 @Entity
 @Table(name = "det_denuncia")
 @Getter
@@ -51,9 +51,10 @@ public class Denuncia {
     @Column(columnDefinition = "accion_moderacion")
     private AccionModeracion accion;
 
-    @Column(name = "justificacion_admin", length = 1000)
-    private String justificacionAdmin;
+    @Column(length = 1000)
+    private String justificacion;
 
+    /** null = resuelta automáticamente por el sistema. */
     @Column(name = "resuelta_por_id")
     private UUID resueltaPorId;
 
@@ -63,4 +64,13 @@ public class Denuncia {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
+
+    /** Cierre automático (ck_denuncia_resolucion: justificación de al menos 10 caracteres). */
+    public void resolverPorSistema(AccionModeracion accion, String justificacion) {
+        this.estado = EstadoDenuncia.RESUELTA;
+        this.accion = accion;
+        this.justificacion = justificacion;
+        this.resueltaPorId = null;
+        this.resueltaEn = OffsetDateTime.now();
+    }
 }

@@ -32,6 +32,9 @@ public class PublicacionService {
         if (p.getEstado() == nuevo) {
             return;
         }
+        if (p.getEstado() == EstadoPublicacion.MODERADA) {
+            throw ApiException.prohibido("Esta publicación fue ocultada por denuncias de la comunidad y no puede cambiar de estado.");
+        }
         EstadoPublicacion anterior = p.cambiarEstado(nuevo);
         historial.registrar(EntidadHistorial.PUBLICACION, p.getId(), anterior, nuevo, actorId, motivo);
     }
@@ -41,6 +44,13 @@ public class PublicacionService {
         EstadoPublicacion anterior = p.darDeBaja();
         historial.registrar(EntidadHistorial.PUBLICACION, p.getId(), anterior, EstadoPublicacion.INACTIVA, actorId,
                 motivo != null ? motivo : "Baja lógica");
+    }
+
+    /** Lectura de detalle: lo ocultado por moderación responde 404 a todos menos al autor. */
+    public void exigirVisible(Publicacion p, UUID lectorId) {
+        if (!p.visiblePara(lectorId)) {
+            throw ApiException.noEncontrado("La publicación");
+        }
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

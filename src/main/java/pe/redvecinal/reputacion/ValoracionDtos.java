@@ -2,7 +2,6 @@ package pe.redvecinal.reputacion;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.OffsetDateTime;
@@ -21,7 +20,4 @@ public final class ValoracionDtos {
     public record ValoracionResponse(UUID id, Short puntuacion, String comentario, String autorNombre,
                                      OffsetDateTime createdAt) {}
 
-    public record OcultarRequest(
-            @NotBlank(message = "La justificación es obligatoria")
-            @Size(min = 10, max = 500, message = "Entre 10 y 500 caracteres") String justificacion) {}
 }

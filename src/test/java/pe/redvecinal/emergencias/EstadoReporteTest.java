@@ -11,10 +11,10 @@ class EstadoReporteTest {
     @Test
     void alCerrarSeCompletanLosCamposQueExigeLaBd() {
         ReporteHumanitario r = new ReporteHumanitario();
-        UUID admin = UUID.randomUUID();
-        r.transicionar(EstadoReporte.ATENDIDA, admin, "Se entregaron víveres");
+        UUID actor = UUID.randomUUID();
+        r.transicionar(EstadoReporte.ATENDIDA, actor, "Se entregaron víveres");
         assertThat(r.getCerradoEn()).isNotNull();
-        assertThat(r.getCerradoPorId()).isEqualTo(admin);
+        assertThat(r.getCerradoPorId()).isEqualTo(actor);
     }
 
     @Test

@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -43,13 +42,11 @@ public class ServicioController {
     @Operation(summary = "RF15/RF17 Directorio de servicios activos de mi zona, con filtros")
     @GetMapping
     public PageResponse<ServicioResumen> catalogo(@AuthenticationPrincipal UsuarioAutenticado yo,
-                                                  @RequestParam(required = false) UUID zonaId,
                                                   @RequestParam(required = false) Integer categoriaId,
                                                   @RequestParam(required = false) String marca,
                                                   @RequestParam(defaultValue = "0") int page,
                                                   @RequestParam(defaultValue = "20") int size) {
-        UUID zona = yo.esAdmin() && zonaId != null ? zonaId : yo.zonaObligatoria();
-        return servicioService.catalogo(zona, categoriaId, marca, PageResponse.pagina(page, size));
+        return servicioService.catalogo(yo.zonaObligatoria(), categoriaId, marca, PageResponse.pagina(page, size));
     }
 
     @Operation(summary = "RF16 Autocompletado predictivo por nombre")
@@ -69,21 +66,19 @@ public class ServicioController {
 
     @Operation(summary = "RF19/RF20/RF45 Ficha del servicio con valoración promedio y badge")
     @GetMapping("/{id}")
-    public ServicioDetalle detalle(@PathVariable UUID id) {
-        return servicioService.detalle(id);
+    public ServicioDetalle detalle(@AuthenticationPrincipal UsuarioAutenticado yo, @PathVariable UUID id) {
+        return servicioService.detalle(id, yo.id());
     }
 
     @Operation(summary = "RF11 Registrar servicio u oficio")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('PRESTADOR')")
     public ServicioDetalle crear(@AuthenticationPrincipal UsuarioAutenticado yo, @Valid @RequestBody ServicioRequest req) {
         return servicioService.crear(yo, req);
     }
 
     @Operation(summary = "RF13 Editar servicio y tarifas")
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('PRESTADOR')")
     public ServicioDetalle actualizar(@AuthenticationPrincipal UsuarioAutenticado yo, @PathVariable UUID id,
                                       @Valid @RequestBody ServicioRequest req) {
         return servicioService.actualizar(yo, id, req);

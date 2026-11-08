@@ -77,8 +77,8 @@ public class SolidaridadController {
     }
 
     @GetMapping("/{id}")
-    public Detalle detalle(@PathVariable UUID id) {
-        return service.detalle(id);
+    public Detalle detalle(@AuthenticationPrincipal UsuarioAutenticado yo, @PathVariable UUID id) {
+        return service.detalle(id, yo.id());
     }
 
     @Operation(summary = "RF22/RF30 Quiero ayudar (botón rápido)")

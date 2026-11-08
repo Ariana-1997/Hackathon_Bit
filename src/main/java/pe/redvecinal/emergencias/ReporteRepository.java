@@ -19,14 +19,5 @@ public interface ReporteRepository extends JpaRepository<ReporteHumanitario, UUI
            """)
     List<ReporteHumanitario> activosDeZona(@Param("zonaId") UUID zonaId);
 
-    /** RF40: historial de alertas pasadas (cerradas). */
-    @Query("""
-           select r from ReporteHumanitario r
-           where (:zonaId is null or r.zonaId = :zonaId)
-             and r.estado in (pe.redvecinal.emergencias.EstadoReporte.ATENDIDA, pe.redvecinal.emergencias.EstadoReporte.DESCARTADA)
-           order by r.cerradoEn desc
-           """)
-    Page<ReporteHumanitario> cerrados(@Param("zonaId") UUID zonaId, Pageable pageable);
-
     Page<ReporteHumanitario> findByReportanteIdOrderByCreatedAtDesc(UUID reportanteId, Pageable pageable);
 }

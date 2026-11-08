@@ -14,15 +14,12 @@ public final class AuthDtos {
             @NotBlank(message = "Ingresa tu correo") @Email(message = "El correo no es válido") String email,
             @NotBlank(message = "Ingresa tu contraseña") String password) {}
 
-    public enum TipoCuenta { VECINO, PRESTADOR }
-
     public record RegistroRequest(
             @NotBlank(message = "Ingresa tu correo") @Email(message = "El correo no es válido") String email,
             @NotBlank(message = "Ingresa una contraseña")
             @Size(min = 8, max = 72, message = "La contraseña debe tener entre 8 y 72 caracteres") String password,
             @NotBlank(message = "Ingresa tu nombre") @Size(max = 120, message = "Máximo 120 caracteres") String nombre,
-            @Pattern(regexp = "^[0-9]{9}$", message = "El teléfono debe tener 9 dígitos") String telefono,
-            TipoCuenta tipoCuenta) {}
+            @Pattern(regexp = "^[0-9]{9}$", message = "El teléfono debe tener 9 dígitos") String telefono) {}
 
     public record RefreshRequest(@NotBlank(message = "Falta el refresh token") String refreshToken) {}
 
