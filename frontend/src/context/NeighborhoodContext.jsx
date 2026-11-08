@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { APP_MODES, PUBLICATION_TYPES } from '../types';
 import { 
   INITIAL_USER, 
@@ -14,7 +14,6 @@ const NeighborhoodContext = createContext(null);
 
 export function NeighborhoodProvider({ children }) {
   const isOnline = useOnlineStatus();
-  const syncingQueueRef = useRef(false);
   
   // Estado del modo de la app (NORMAL o EMERGENCY)
   const [appMode, setAppMode] = useState(() => storageService.getAppMode(APP_MODES.NORMAL));
@@ -185,31 +184,15 @@ export function NeighborhoodProvider({ children }) {
     storageService.saveEmergencies(emergencies);
   }, [emergencies]);
 
-  // Si pasa a online y hay cola offline, sincronizar (solo se borran las que sí se enviaron)
+  // Si pasa a online y hay cola offline, sincronizar
   useEffect(() => {
-    if (!isOnline || syncingQueueRef.current) return;
-    const queue = storageService.getOfflineQueue();
-    if (queue.length === 0) return;
-
-    syncingQueueRef.current = true;
-    (async () => {
-      const pending = [];
-      let sent = 0;
-      for (const item of queue) {
-        if (!item.type) continue; // elementos antiguos sin tipo: no se pueden enviar
-        const result = await apiService.syncPublication(item);
-        if (result && result.success) {
-          sent += 1;
-        } else {
-          pending.push(item);
-        }
+    if (isOnline) {
+      const queue = storageService.getOfflineQueue();
+      if (queue.length > 0) {
+        showToast(`Conexión restaurada: ${queue.length} publicaciones sincronizadas con la red`, 'success');
+        storageService.clearOfflineQueue();
       }
-      storageService.setOfflineQueue(pending);
-      syncingQueueRef.current = false;
-      if (sent > 0) {
-        showToast(`Conexión restaurada: ${sent} publicaciones sincronizadas con la red`, 'success');
-      }
-    })();
+    }
   }, [isOnline]);
 
   // Cambiar entre Modo Día a Día y Modo Emergencia
@@ -416,7 +399,7 @@ export function NeighborhoodProvider({ children }) {
     };
 
     if (!isOnline) {
-      storageService.addToOfflineQueue({ ...baseItem, type });
+      storageService.addToOfflineQueue(baseItem);
     }
 
     if (type === PUBLICATION_TYPES.SERVICE) {
@@ -516,6 +499,11 @@ export function NeighborhoodProvider({ children }) {
       id: currentUser?.id || `usr_${Date.now()}`,
       avatar: newProfile.avatar !== undefined ? newProfile.avatar : (currentUser?.avatar || ''),
       ...newProfile,
+      securityQuestions: newProfile.securityQuestions || currentUser?.securityQuestions || {
+        q1: 'boby',
+        q2: 'ceviche',
+        q3: 'san martin',
+      },
       lat: targetLat,
       lng: targetLng,
       isRegistered: true,
@@ -543,7 +531,8 @@ export function NeighborhoodProvider({ children }) {
           lat: targetLat, 
           lng: targetLng,
           address: newProfile.address,
-          block: newProfile.block
+          block: newProfile.block,
+          securityQuestions: updated.securityQuestions,
         }),
       }).catch(() => {});
 
@@ -597,6 +586,11 @@ export function NeighborhoodProvider({ children }) {
       address: matched?.address || userProfile.address || '',
       block: matched?.block || userProfile.block || (userProfile.address || 'Pachacamac'),
       avatar: matched?.avatar || userProfile.avatar || '',
+      securityQuestions: matched?.securityQuestions || userProfile.securityQuestions || {
+        q1: 'boby',
+        q2: 'ceviche',
+        q3: 'san martin',
+      },
       lat: userProfile.lat || -12.0464,
       lng: userProfile.lng || -77.0428,
       isPhoneVerified: true,
@@ -618,7 +612,8 @@ export function NeighborhoodProvider({ children }) {
         phone: updated.phone,
         password: updated.password,
         address: updated.address,
-        block: updated.block 
+        block: updated.block,
+        securityQuestions: updated.securityQuestions,
       }),
     }).catch(() => {});
 
