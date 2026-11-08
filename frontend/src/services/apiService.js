@@ -4,7 +4,6 @@
  * Por defecto apunta al backend local del equipo (http://localhost:8080) o al configurado en VITE_BACKEND_URL
  */
 
-const CLOUD_BACKEND_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_BACKEND_URL) || 'http://localhost:8080';
 const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || '/api/v1';
 
 const TOKEN_KEY = 'redvecinal_auth_token';
@@ -13,7 +12,6 @@ const REFRESH_KEY = 'redvecinal_refresh_token';
 class ApiService {
   constructor() {
     this.baseUrl = API_BASE_URL;
-    this.cloudRoot = CLOUD_BACKEND_URL;
     this.token = localStorage.getItem(TOKEN_KEY) || null;
   }
 
@@ -49,82 +47,22 @@ class ApiService {
     return headers;
   }
 
-  // Sincronización comunitaria en tiempo real
-  async syncPublication(item) {
-    try {
-      const res = await fetch('/api/sync/publish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(item),
-      });
-      return await res.json();
-    } catch (err) {
-      console.warn('Sync publication fallback:', err.message);
-      return null;
-    }
-  }
+  // Todas las operaciones de negocio se realizan contra la API Spring Boot.
+  // No hay rutas alternativas /api/sync ni llamadas directas desde el navegador a Supabase.
 
-  async fetchCommunityFeed() {
-    try {
-      const res = await fetch('/api/sync/feed');
-      if (res.ok) {
-        return await res.json();
-      }
-    } catch (err) {
-      console.warn('Fetch community feed fallback:', err.message);
-    }
-    return null;
-  }
-
-  // Verificar si un usuario (por email o celular) está registrado en la base de datos
-  async checkUserExists(identifier) {
-    try {
-      if (!identifier) return { exists: false };
-      const clean = identifier.toString().trim();
-      const res = await fetch(`/api/sync/check-user?query=${encodeURIComponent(clean)}`);
-      if (res.ok) {
-        return await res.json();
-      }
-    } catch (err) {
-      console.warn('Check user fallback:', err.message);
-    }
-    return { exists: false };
-  }
-
-  // 1. Verificación del estado del servidor (Health Check)
-  // Intenta primero la ruta local/proxy y luego directamente a la nube
+  // Health check por el mismo origen; el proxy lo reenvía a Spring Boot.
   async checkHealth() {
-    // Intento 1: Proxy local o mismo origen (/actuator/health)
     try {
-      const res = await fetch('/actuator/health', {
+      const response = await fetch('/actuator/health', {
         method: 'GET',
-        headers: { 'Accept': 'application/json' },
+        headers: { Accept: 'application/json' },
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.status === 'UP') {
-          return { isOnline: true, data };
-        }
-      }
+      if (!response.ok) return { isOnline: false };
+      const data = await response.json();
+      return { isOnline: data.status === 'UP', data };
     } catch {
-      // Ignorar e intentar conexión directa
+      return { isOnline: false };
     }
-
-    // Intento 2: Conexión directa a la nube Render
-    try {
-      const resDirect = await fetch(`${this.cloudRoot}/actuator/health`, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-      });
-      if (resDirect.ok) {
-        const data = await resDirect.json();
-        return { isOnline: data.status === 'UP', data };
-      }
-    } catch {
-      // Fallo offline
-    }
-
-    return { isOnline: false };
   }
 
   // 2. Módulo de Autenticación
@@ -148,8 +86,20 @@ class ApiService {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || data.message || 'Error al registrarse');
-    this.setSession(data.accessToken, data.refreshToken);
+    if (data.accessToken) this.setSession(data.accessToken, data.refreshToken);
     return data;
+  }
+
+  async recuperarPassword(email) {
+    const res = await fetch(`${this.baseUrl}/auth/recuperar`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || data.message || 'No se pudo solicitar la recuperación.');
+    }
   }
 
   async logout() {
@@ -226,54 +176,20 @@ class ApiService {
     return data;
   }
 
-  // Asegurar sesión y ubicación geográfica activa en Supabase (RF09 / RF10)
-  async ensureSession(user) {
-    if (this.token) {
-      return this.token;
+  // No crear cuentas demo ni credenciales automáticas. La sesión debe venir del login real.
+  async ensureSession() {
+    if (!this.token) {
+      throw new Error('Debes iniciar sesión con una cuenta registrada para continuar.');
     }
-    try {
-      const authorPhone = user?.phone || '987654321';
-      const cleanPhone = authorPhone.replace(/\D/g, '').slice(-9).padStart(9, '9');
-      const authorName = user?.name || 'Carlos Mendoza';
-      const cleanSlug = authorName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10);
-      const email = `${cleanSlug || 'carlos'}.${cleanPhone.slice(-4)}@barrio.pe`;
-      const password = 'Password123!';
-
-      let token = null;
-      try {
-        const loginData = await this.login(email, password);
-        token = loginData.accessToken;
-      } catch {
-        try {
-          await this.registro({
-            email,
-            password,
-            nombre: authorName,
-            telefono: cleanPhone,
-            tipoCuenta: 'PRESTADOR',
-          });
-          const loginData2 = await this.login(email, password);
-          token = loginData2.accessToken;
-        } catch {}
-      }
-
-      if (token) {
-        this.setSession(token);
-        // Asegurar asociación de zona geográfica en PostGIS (RF10)
-        await this.actualizarUbicacion(-12.0464, -77.0428).catch(() => {});
-      }
-      return token;
-    } catch {
-      return null;
-    }
+    return this.token;
   }
 
-  // Cargar servicios reales directamente desde las tablas de Supabase
+  // Cargar servicios desde la API del backend (Spring Boot)
   async fetchCloudServices() {
     try {
       const raw = await this.getServicios();
       const list = raw.contenido || (Array.isArray(raw) ? raw : []);
-      if (!list || list.length === 0) return null;
+      if (!list || list.length === 0) return [];
 
       const formatted = await Promise.all(
         list.map(async (s) => {
@@ -285,7 +201,7 @@ class ApiService {
             }
           } catch {}
 
-          const cleanPhone = detail.telefonoContacto || s.telefonoContacto || '987654321';
+          const cleanPhone = detail.telefonoContacto || s.telefonoContacto || '';
           const authorName = detail.autorNombre || s.nombreComercial || s.titulo;
 
           return {
@@ -301,18 +217,11 @@ class ApiService {
               avatar: '',
               isVerified: true,
             },
-            distanceMeters: Math.floor(Math.random() * 80) + 30,
-            lat: s.lat || -12.0464,
-            lng: s.lng || -77.0428,
-            endorsementsCount: s.totalValoraciones || 1,
-            endorsements: [
-              {
-                id: `end_${s.id}_seed`,
-                neighbor: 'Vecino del Barrio',
-                text: 'Recomiendo este servicio vecinal con total confianza.',
-                date: 'Reciente',
-              }
-            ],
+            distanceMeters: s.distanciaM ?? null,
+            lat: s.lat ?? null,
+            lng: s.lng ?? null,
+            endorsementsCount: s.totalValoraciones || 0,
+            endorsements: [],
             availableInEmergency: true,
             isAvailableNow: true,
             isCloudSynced: true,
@@ -328,9 +237,9 @@ class ApiService {
     }
   }
 
-  // Publicación completa en la nube Supabase a través del backend Spring Boot
-  async publicarEnSupabase(item, user) {
-    const cleanPhone = (user?.phone || '933613514').replace(/\D/g, '').slice(-9).padStart(9, '9');
+  // Publicación a través de Spring Boot; el navegador nunca se conecta directamente a la base de datos
+  async publicarEnBackend(item, user) {
+    const cleanPhone = (user?.phone || '').replace(/\D/g, '').slice(-9);
 
     // 1. Asegurar sesión
     await this.ensureSession(user);
@@ -340,11 +249,14 @@ class ApiService {
     }
 
     // 2. Asegurar ubicación de zona en PostGIS (RF10)
-    const lat = item.lat || user?.lat || -12.0464;
-    const lng = item.lng || user?.lng || -77.0428;
-    await this.actualizarUbicacion(lat, lng).catch(() => {});
+    const lat = item.lat ?? user?.lat;
+    const lng = item.lng ?? user?.lng;
+    if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
+      throw new Error('Debes compartir una ubicación válida antes de publicar.');
+    }
+    await this.actualizarUbicacion(Number(lat), Number(lng));
 
-    // 3. Crear el servicio oficial en Supabase con auto-recuperación de zona
+    // 3. Enviar la publicación a Spring Boot
     if (item.type === 'SERVICE') {
       const payload = {
         categoriaId: 4,
@@ -359,17 +271,9 @@ class ApiService {
       };
       try {
         const created = await this.crearServicio(payload);
-        console.log('[Supabase Cloud] ✅ Servicio creado exitosamente en mae_publicacion:', created);
+        console.log('[Backend] Servicio creado correctamente.');
         return created;
       } catch (err) {
-        if (err.codigo === 'SIN_ZONA' || err.status === 422 || err.message?.includes('SIN_ZONA') || err.message?.includes('zona')) {
-          console.warn('[Supabase Cloud] Coordenadas fuera de ZONA-01. Reintentando con centro de zona comunitaria...');
-          await this.actualizarUbicacion(-12.0464, -77.0428).catch(() => {});
-          payload.lat = -12.0464;
-          payload.lng = -77.0428;
-          const retryCreated = await this.crearServicio(payload);
-          return retryCreated;
-        }
         throw err;
       }
     } else if (item.type === 'FAVOR') {
@@ -383,17 +287,9 @@ class ApiService {
       };
       try {
         const created = await this.crearSolidaridad(payload);
-        console.log('[Supabase Cloud] ✅ Favor creado exitosamente en mae_publicacion:', created);
+        console.log('[Backend] Publicación solidaria creada correctamente.');
         return created;
       } catch (err) {
-        if (err.codigo === 'SIN_ZONA' || err.status === 422 || err.message?.includes('SIN_ZONA') || err.message?.includes('zona')) {
-          console.warn('[Supabase Cloud] Coordenadas fuera de ZONA-01. Reintentando con centro de zona comunitaria...');
-          await this.actualizarUbicacion(-12.0464, -77.0428).catch(() => {});
-          payload.lat = -12.0464;
-          payload.lng = -77.0428;
-          const retryCreated = await this.crearSolidaridad(payload);
-          return retryCreated;
-        }
         throw err;
       }
     }
@@ -402,6 +298,7 @@ class ApiService {
 
   // 5. Módulo Solidaridad (Cadena de Favores)
   async getSolidaridad(params = {}) {
+    await this.ensureSession();
     const query = new URLSearchParams(params).toString();
     const url = `${this.baseUrl}/solidaridad${query ? `?${query}` : ''}`;
     const res = await fetch(url, { headers: this.getHeaders() });
@@ -410,6 +307,7 @@ class ApiService {
   }
 
   async crearSolidaridad(favorData) {
+    await this.ensureSession();
     const res = await fetch(`${this.baseUrl}/solidaridad`, {
       method: 'POST',
       headers: this.getHeaders(),
@@ -421,7 +319,8 @@ class ApiService {
 
   // 6. Módulo Emergencias (Alertas SOS en Tiempo Real)
   async getEmergencias() {
-    const res = await fetch(`${this.baseUrl}/emergencias/reportes/abiertos`, {
+    await this.ensureSession();
+    const res = await fetch(`${this.baseUrl}/emergencias/dashboard`, {
       headers: this.getHeaders(),
     });
     if (!res.ok) throw new Error('Error al cargar emergencias');
@@ -429,6 +328,7 @@ class ApiService {
   }
 
   async reportarEmergencia(emergenciaData) {
+    await this.ensureSession();
     const res = await fetch(`${this.baseUrl}/emergencias/reportes`, {
       method: 'POST',
       headers: this.getHeaders(),
@@ -438,30 +338,46 @@ class ApiService {
     return await res.json();
   }
 
-  // Conexión Server-Sent Events (SSE) para dashboard en vivo
+  // SSE autenticado: EventSource no permite enviar Authorization Bearer,
+  // por eso se utiliza fetch + ReadableStream.
   crearStreamEmergencias(onNuevaEmergencia, onError) {
-    try {
-      const url = `${this.baseUrl}/emergencias/stream`;
-      const eventSource = new EventSource(url);
-      
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          onNuevaEmergencia(data);
-        } catch {
-          // Ignorar pings de keep-alive
+    const controller = new AbortController();
+    const url = `${this.baseUrl}/emergencias/stream`;
+
+    (async () => {
+      try {
+        const response = await fetch(url, {
+          headers: { ...this.getHeaders(), Accept: 'text/event-stream' },
+          signal: controller.signal,
+        });
+        if (!response.ok || !response.body) {
+          throw new Error(`No se pudo abrir el flujo de emergencias (${response.status}).`);
         }
-      };
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (!controller.signal.aborted) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split(/\r?\n\r?\n/);
+          buffer = events.pop() || '';
+          for (const eventText of events) {
+            const dataLine = eventText.split(/\r?\n/).find((line) => line.startsWith('data:'));
+            if (!dataLine) continue;
+            try {
+              onNuevaEmergencia(JSON.parse(dataLine.slice(5).trim()));
+            } catch {
+              // Ignorar eventos keep-alive o mensajes no JSON.
+            }
+          }
+        }
+      } catch (error) {
+        if (!controller.signal.aborted && onError) onError(error);
+      }
+    })();
 
-      eventSource.onerror = (err) => {
-        if (onError) onError(err);
-      };
-
-      return eventSource;
-    } catch (err) {
-      if (onError) onError(err);
-      return null;
-    }
+    return { close: () => controller.abort() };
   }
 
   // 7. Directorio de soporte
