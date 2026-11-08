@@ -49,9 +49,10 @@ public class SecurityConfig {
             "/actuator/health/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html"
     };
 
-    @Bean
+     @Bean
     SecurityFilterChain api(HttpSecurity http, SupabaseJwtAuthenticationConverter converter,
-                            CorsConfigurationSource cors, ObjectMapper objectMapper) throws Exception {
+                            @org.springframework.beans.factory.annotation.Qualifier("corsConfigurationSource") CorsConfigurationSource cors,
+                            ObjectMapper objectMapper) throws Exception {
         AuthenticationEntryPoint entryPoint = (req, res, ex) -> {
             ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED,
                     "Tu sesión no es válida o expiró. Vuelve a iniciar sesión.");
@@ -110,6 +111,7 @@ public class SecurityConfig {
     }
 
     @Bean
+    @org.springframework.context.annotation.Primary
     CorsConfigurationSource corsConfigurationSource(AppProperties props) {
         CorsConfiguration cfg = new CorsConfiguration();
         cfg.setAllowedOrigins(props.cors().allowedOrigins());
