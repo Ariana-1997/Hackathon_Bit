@@ -1,0 +1,113 @@
+# =====================================================================
+# Configuración común. Todo dato sensible llega por variables de entorno (RNF-16).
+# Perfiles: dev (local) y prod (despliegue). Ver .env.example
+# =====================================================================
+spring:
+  application:
+    name: redvecinal-backend
+  profiles:
+    default: dev
+  threads:
+    virtual:
+      enabled: true            # Java 21: hilos virtuales para peticiones HTTP
+
+  datasource:
+    # Supabase -> Project Settings -> Database -> Connection string (JDBC).
+    # Recomendado: "Session pooler" (puerto 5432, compatible IPv4) o conexión directa.
+    # Si usas "Transaction pooler" (6543) agrega ?prepareThreshold=0 a la URL.
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:                                  # Pool configurable (RNF-07) y tiempos de espera (RNF-30)
+      pool-name: redvecinal-pool
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: ${DB_POOL_MIN:2}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:10000}
+      validation-timeout: 5000
+      idle-timeout: 300000
+      max-lifetime: 1500000
+      data-source-properties:
+        ApplicationName: redvecinal-backend
+        socketTimeout: 30
+        tcpKeepAlive: true
+        reWriteBatchedInserts: true
+
+  jpa:
+    open-in-view: false                      # Evita consultas perezosas en la vista (RNF-09)
+    hibernate:
+      ddl-auto: none                         # El esquema lo manda la BD (Flyway), nunca Hibernate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+        default_batch_fetch_size: 50
+        query:
+          fail_on_pagination_over_collection_fetch: true
+
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    locations: classpath:db/migration
+    # La BD de Supabase ya tiene el script v2 aplicado: Flyway la marca como versión 1
+    # y solo ejecutará migraciones nuevas (V2__..., V3__...).
+    baseline-on-migrate: true
+    baseline-version: 1
+
+  transaction:
+    default-timeout: 15                      # segundos (RNF-30)
+
+  jackson:
+    default-property-inclusion: non_null
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: ${PORT:8080}
+  forward-headers-strategy: framework        # HTTPS termina en el proxy/plataforma (RNF-11)
+  compression:
+    enabled: true
+  error:
+    include-stacktrace: never
+    include-message: never
+
+app:
+  supabase:
+    url: ${SUPABASE_URL}                                 # https://<ref>.supabase.co
+    anon-key: ${SUPABASE_ANON_KEY}                       # clave publicable (anon / publishable)
+    service-role-key: ${SUPABASE_SERVICE_ROLE_KEY}       # SOLO backend. Nunca al frontend
+    jwt-secret: ${SUPABASE_JWT_SECRET:}                  # solo si el proyecto usa el secreto HS256 heredado
+    storage-bucket: ${SUPABASE_BUCKET:publicaciones}
+    redirect-recuperacion: ${FRONTEND_URL:http://localhost:5173}/restablecer-clave
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:5173}
+  seguridad:
+    max-intentos-login: 3                    # RF06
+    minutos-bloqueo: 5                       # RF06
+    decimales-ubicacion-aprox: 3             # ~110 m. Ubicación aproximada (RF09, RNF-20)
+  emergencias:
+    sse-timeout-ms: 1800000                  # 30 min por conexión del dashboard (RF35)
+    radio-maximo-km: 20
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    level: "%5p [req:%X{requestId:-}]"

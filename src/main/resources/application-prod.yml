@@ -1,0 +1,10 @@
+springdoc:
+  swagger-ui:
+    enabled: false                    # la especificación /v3/api-docs sigue disponible
+logging:
+  structured:
+    format:
+      console: ecs                    # logs JSON para la plataforma de despliegue (RNF-28)
+  level:
+    root: INFO
+    pe.redvecinal: INFO
