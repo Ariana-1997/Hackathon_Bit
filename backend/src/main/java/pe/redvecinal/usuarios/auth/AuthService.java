@@ -72,8 +72,16 @@ public class AuthService {
     public UUID registrar(RegistroRequest req) {
         UUID authUserId = supabase.registrar(req.email(), req.password());
         try {
-            return tx.execute(status -> usuarios.save(
-                    Usuario.nuevo(authUserId, req.nombre().trim(), req.telefono())).getId());
+            return tx.execute(status -> {
+                return usuarios.findByAuthUserId(authUserId)
+                        .map(existente -> {
+                            existente.setNombre(req.nombre().trim());
+                            if (req.telefono() != null) existente.setTelefono(req.telefono());
+                            return usuarios.save(existente).getId();
+                        })
+                        .orElseGet(() -> usuarios.save(
+                                Usuario.nuevo(authUserId, req.nombre().trim(), req.telefono())).getId());
+            });
         } catch (RuntimeException e) {
             log.error("Fallo al crear el perfil; se revierte el alta en Supabase Auth", e);
             supabase.eliminarUsuario(authUserId);
