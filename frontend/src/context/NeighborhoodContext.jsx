@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { APP_MODES, PUBLICATION_TYPES } from '../types';
 import { 
   INITIAL_USER, 
@@ -14,6 +14,7 @@ const NeighborhoodContext = createContext(null);
 
 export function NeighborhoodProvider({ children }) {
   const isOnline = useOnlineStatus();
+  const syncingQueueRef = useRef(false);
   
   // Estado del modo de la app (NORMAL o EMERGENCY)
   const [appMode, setAppMode] = useState(() => storageService.getAppMode(APP_MODES.NORMAL));
@@ -184,15 +185,31 @@ export function NeighborhoodProvider({ children }) {
     storageService.saveEmergencies(emergencies);
   }, [emergencies]);
 
-  // Si pasa a online y hay cola offline, sincronizar
+  // Si pasa a online y hay cola offline, sincronizar (solo se borran las que sí se enviaron)
   useEffect(() => {
-    if (isOnline) {
-      const queue = storageService.getOfflineQueue();
-      if (queue.length > 0) {
-        showToast(`Conexión restaurada: ${queue.length} publicaciones sincronizadas con la red`, 'success');
-        storageService.clearOfflineQueue();
+    if (!isOnline || syncingQueueRef.current) return;
+    const queue = storageService.getOfflineQueue();
+    if (queue.length === 0) return;
+
+    syncingQueueRef.current = true;
+    (async () => {
+      const pending = [];
+      let sent = 0;
+      for (const item of queue) {
+        if (!item.type) continue; // elementos antiguos sin tipo: no se pueden enviar
+        const result = await apiService.syncPublication(item);
+        if (result && result.success) {
+          sent += 1;
+        } else {
+          pending.push(item);
+        }
       }
-    }
+      storageService.setOfflineQueue(pending);
+      syncingQueueRef.current = false;
+      if (sent > 0) {
+        showToast(`Conexión restaurada: ${sent} publicaciones sincronizadas con la red`, 'success');
+      }
+    })();
   }, [isOnline]);
 
   // Cambiar entre Modo Día a Día y Modo Emergencia
@@ -369,16 +386,22 @@ export function NeighborhoodProvider({ children }) {
   };
 
   // Publicación rápida de 3 clics con guardado real en Supabase
-  const addPublication = async ({ type, category, title, description, priceNote, availableInEmergency, isAvailableNow }) => {
+  const addPublication = async ({ type, category, title, description, priceNote, availableInEmergency, isAvailableNow, address: customPubAddress }) => {
     const userToUse = currentUser || INITIAL_USER;
+    const finalLocation = customPubAddress || userToUse.address || userToUse.block || 'Pachacamac';
+    const detectedBlock = finalLocation.match(/(?:Manzana|Mz\.?)\s*([A-Za-z0-9]+)/i);
+    const authorBlock = detectedBlock ? `Manzana ${detectedBlock[1].toUpperCase()}` : (userToUse.block || finalLocation);
+
     const baseItem = {
       id: `pub_${Date.now()}`,
+      address: finalLocation,
       author: {
         name: userToUse.name,
         email: userToUse.email || '',
         phone: userToUse.phone,
         password: userToUse.password || 'Password123!',
-        block: userToUse.block,
+        address: finalLocation,
+        block: authorBlock,
         avatar: userToUse.avatar,
         isVerified: true,
       },
@@ -393,7 +416,7 @@ export function NeighborhoodProvider({ children }) {
     };
 
     if (!isOnline) {
-      storageService.addToOfflineQueue(baseItem);
+      storageService.addToOfflineQueue({ ...baseItem, type });
     }
 
     if (type === PUBLICATION_TYPES.SERVICE) {
@@ -571,8 +594,8 @@ export function NeighborhoodProvider({ children }) {
       email: cleanEmail || matched?.email || (cleanDigits ? `${cleanDigits}@barrio.pe` : ''),
       password: userProfile.password || matched?.password || 'Password123!',
       phone: cleanDigits || matched?.phone || '',
-      address: matched?.address || userProfile.address || 'La Casica - Pachacamac',
-      block: matched?.block || userProfile.block || 'Manzana C',
+      address: matched?.address || userProfile.address || '',
+      block: matched?.block || userProfile.block || (userProfile.address || 'Pachacamac'),
       avatar: matched?.avatar || userProfile.avatar || '',
       lat: userProfile.lat || -12.0464,
       lng: userProfile.lng || -77.0428,

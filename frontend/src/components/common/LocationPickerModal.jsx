@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+import { geolocationService } from '../../services/geolocationService';
 import { 
   X, 
   MapPin, 
@@ -191,6 +192,7 @@ export default function LocationPickerModal({
         setIsLocatingGps(false);
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
+        geolocationService.saveLastPosition(lat, lng);
         if (mapInstanceRef.current) {
           mapInstanceRef.current.flyTo([lat, lng], 17, { duration: 1.2 });
         }
@@ -200,9 +202,14 @@ export default function LocationPickerModal({
       (err) => {
         setIsLocatingGps(false);
         console.warn('GPS error, using fallback:', err.message);
-        // Volar a Pachacámac Centro si falló el permiso
+        // Volar a la última ubicación GPS conocida; si no hay, a Pachacámac Centro
+        const last = geolocationService.getLastPosition();
         if (mapInstanceRef.current) {
-          mapInstanceRef.current.flyTo([-12.0862, -77.0503], 17, { duration: 1 });
+          mapInstanceRef.current.flyTo(
+            last ? [last.lat, last.lng] : [-12.0862, -77.0503],
+            17,
+            { duration: 1 }
+          );
         }
       },
       { enableHighAccuracy: true, timeout: 8000 }

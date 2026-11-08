@@ -166,6 +166,10 @@ export const storageService = {
     return this.get(STORAGE_KEYS.OFFLINE_QUEUE, []);
   },
 
+  setOfflineQueue(queue) {
+    this.set(STORAGE_KEYS.OFFLINE_QUEUE, queue);
+  },
+
   clearOfflineQueue() {
     this.set(STORAGE_KEYS.OFFLINE_QUEUE, []);
   },
@@ -210,8 +214,8 @@ export const storageService = {
       email: cleanEmail || (cleanPhone ? `${cleanPhone}@barrio.pe` : ''),
       password: user.password || 'Password123!',
       phone: cleanPhone || user.phone || '',
-      address: user.address || 'La Casica - Pachacamac',
-      block: user.block || 'Manzana C',
+      address: user.address || '',
+      block: user.block || (user.address || 'Pachacamac'),
       avatar: user.avatar || '',
       lat: user.lat || -12.0464,
       lng: user.lng || -77.0428,

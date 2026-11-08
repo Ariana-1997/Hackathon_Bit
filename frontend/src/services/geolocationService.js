@@ -38,26 +38,56 @@ export const geolocationService = {
   },
 
   /**
+   * Guarda la última posición GPS válida (para usarla cuando no hay señal / internet)
+   */
+  saveLastPosition(lat, lng) {
+    try {
+      localStorage.setItem('vecinos_last_position', JSON.stringify({ lat, lng, ts: Date.now() }));
+    } catch {
+      // localStorage no disponible: se ignora
+    }
+  },
+
+  /**
+   * Devuelve la última posición GPS guardada ({ lat, lng, ts }) o null
+   */
+  getLastPosition() {
+    try {
+      const raw = JSON.parse(localStorage.getItem('vecinos_last_position'));
+      if (raw && Number.isFinite(raw.lat) && Number.isFinite(raw.lng)) return raw;
+    } catch {
+      // dato corrupto: se ignora
+    }
+    return null;
+  },
+
+  /**
    * Obtiene la posición actual del usuario con fallback seguro
+   * (último GPS conocido y, si no existe, las coordenadas del barrio)
    */
   async getCurrentPosition(fallbackCoords = { lat: -12.0862, lng: -77.0503 }) {
+    const last = this.getLastPosition();
+    const safeFallback = last ? { lat: last.lat, lng: last.lng } : fallbackCoords;
+
     if (!('geolocation' in navigator)) {
-      return fallbackCoords;
+      return safeFallback;
     }
 
     return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          resolve({
+          const coords = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
-          });
+          };
+          this.saveLastPosition(coords.lat, coords.lng);
+          resolve(coords);
         },
         (error) => {
-          console.warn('Geolocalización denegada o inaccesible, usando coordenadas del barrio:', error.message);
-          resolve(fallbackCoords);
+          console.warn('Geolocalización denegada o inaccesible, usando última ubicación conocida:', error.message);
+          resolve(safeFallback);
         },
-        { timeout: 5000, enableHighAccuracy: true }
+        { timeout: 8000, enableHighAccuracy: true, maximumAge: 60000 }
       );
     });
   }

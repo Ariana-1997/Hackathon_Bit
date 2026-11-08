@@ -77,7 +77,7 @@ export default function QuickLoginModal({ isOpen, onClose }) {
       setEmail(currentUser.email || '');
       setPassword(currentUser.password || 'Password123!');
       setPhone(currentUser.phone || '933613514');
-      setAddress(currentUser.address || 'La Casica, Mz C - Pachacamac');
+      setAddress(currentUser.address || '');
       setAvatar(currentUser.avatar || '');
       if (currentUser.lat && currentUser.lng) {
         setCoords({ lat: currentUser.lat, lng: currentUser.lng });
@@ -176,8 +176,8 @@ export default function QuickLoginModal({ isOpen, onClose }) {
         email: foundUser?.email || query,
         phone: foundUser?.phone || '933613514',
         name: foundUser?.name || 'Vecino',
-        address: foundUser?.address || 'La Casica, Mz C - Pachacamac',
-        block: foundUser?.block || 'Manzana C',
+        address: foundUser?.address || '',
+        block: foundUser?.block || (foundUser?.address ? foundUser.address : 'Pachacamac'),
         avatar: foundUser?.avatar || '',
         password: foundUser?.password || loginPassword,
       });
@@ -241,12 +241,16 @@ export default function QuickLoginModal({ isOpen, onClose }) {
       showToast('Por favor escribe tus nombres y apellidos', 'warning');
       return;
     }
+    const userTypedAddress = address.trim();
+    const detectedBlock = userTypedAddress.match(/(?:Manzana|Mz\.?)\s*([A-Za-z0-9]+)/i);
+    const blockVal = detectedBlock ? `Manzana ${detectedBlock[1].toUpperCase()}` : (currentUser?.block || userTypedAddress || 'Pachacamac');
+
     updateUserProfile({
       name: fullName,
       email: email.trim().toLowerCase(),
       avatar: avatar,
-      address: address.trim() || 'La Casica, Mz C - Pachacamac',
-      block: 'Manzana C',
+      address: userTypedAddress || currentUser?.address || 'Pachacamac',
+      block: blockVal,
       phone: phone.trim(),
       password: password || 'Password123!',
       lat: coords?.lat || -12.0464,
@@ -280,13 +284,17 @@ export default function QuickLoginModal({ isOpen, onClose }) {
       return;
     }
 
+    const userTypedAddress = address.trim();
+    const detectedBlock = userTypedAddress.match(/(?:Manzana|Mz\.?)\s*([A-Za-z0-9]+)/i);
+    const blockVal = detectedBlock ? `Manzana ${detectedBlock[1].toUpperCase()}` : (userTypedAddress || 'Pachacamac');
+
     await updateUserProfile({
       name: fullName,
       email: email.trim().toLowerCase(),
       password: password,
       avatar: avatar,
-      address: address.trim() || 'La Casica, Mz C - Pachacamac',
-      block: 'Manzana C',
+      address: userTypedAddress || 'Pachacamac',
+      block: blockVal,
       phone: cleanPhone,
       lat: coords?.lat || -12.0464,
       lng: coords?.lng || -77.0428,
