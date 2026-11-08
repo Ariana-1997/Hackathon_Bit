@@ -16,6 +16,8 @@ public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
 
     Optional<Usuario> findByIdAndDeletedAtIsNull(UUID id);
 
+    Optional<Usuario> findByAuthUserId(UUID authUserId);
+
     /** Datos mínimos para autorizar cada petición (se cachean). */
     @Query("""
            select new pe.redvecinal.shared.security.UsuarioAutenticado(u.id, u.authUserId, u.zonaId, u.estado)
