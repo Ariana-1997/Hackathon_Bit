@@ -1,0 +1,33 @@
+# Dependencias
+node_modules/
+.pnp
+.pnp.js
+
+# Producción
+dist/
+
+# Variables de entorno locales
+.env
+.env.local
+.env.*.local
+
+# Datos generados en runtime local (no subir contraseñas ni publicaciones de prueba a Git)
+data/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Archivos de sistema y editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Archivos zip temporales
+*.zip
+scratch/
+
+SUBIR_A_GITHUB/
