@@ -14,86 +14,6 @@ const STORAGE_KEYS = {
   REGISTERED_USERS: 'vecinos_registered_users_list',
 };
 
-const DEFAULT_USERS_CATALOG = [
-  {
-    id: 'usr_carlos_mendoza',
-    name: 'Carlos Mendoza',
-    email: 'carlos.mendoza@barrio.pe',
-    phone: '987654321',
-    password: 'Password123!',
-    address: 'Calle Los Álamos 142',
-    block: 'Manzana B',
-    avatar: '',
-    securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' },
-  },
-  {
-    id: 'usr_yummy_untiveros',
-    name: 'Yummy Untiveros',
-    email: 'yummy@barrio.pe',
-    phone: '933613514',
-    password: 'Password123!',
-    address: 'La Casica - Pachacamac',
-    block: 'Manzana C',
-    avatar: '',
-    securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' },
-  },
-  {
-    id: 'usr_dona_rosa',
-    name: 'Doña Rosa Quispe',
-    email: 'dona.rosa@barrio.pe',
-    phone: '911222333',
-    password: 'Password123!',
-    address: 'Pasaje San Martín 12',
-    block: 'Manzana A',
-    avatar: '',
-    securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' },
-  },
-  {
-    id: 'usr_lucia_fernandez',
-    name: 'Lucia Fernandez',
-    email: 'lucia.fernandez@barrio.pe',
-    phone: '976543210',
-    password: 'Password123!',
-    address: 'Av. Pachacamac 45',
-    block: 'Manzana B',
-    avatar: '',
-    securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' },
-  },
-  {
-    id: 'usr_961024198',
-    name: 'Renato Solis',
-    email: 'renato@barrio.pe',
-    phone: '961024198',
-    password: 'Password123!',
-    address: 'La Casica, Mz C - Pachacamac',
-    block: 'Manzana C',
-    avatar: '',
-    securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' },
-  },
-  {
-    id: 'usr_933613515',
-    name: 'Sandra',
-    email: 'sandra@barrio.pe',
-    phone: '933613515',
-    password: 'Password123!',
-    address: 'Pachacamac',
-    block: 'Manzana C',
-    avatar: '',
-    securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' },
-  },
-  {
-    id: 'usr_pedro_castillo',
-    name: 'Pedro Castillo',
-    email: 'pedro.castillo@barrio.pe',
-    phone: '987111222',
-    password: 'Password123!',
-    address: 'Sector 3',
-    block: 'Manzana D',
-    avatar: '',
-    securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' },
-  },
-];
-
 export const storageService = {
   // Inicialización de datos
   get(key, defaultValue) {
@@ -115,30 +35,53 @@ export const storageService = {
   },
 
   // Servicios de oficios
+  purgeLegacySensitiveData() {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.REGISTERED_USERS);
+      localStorage.removeItem(STORAGE_KEYS.OFFLINE_QUEUE);
+    } catch {}
+  },
+
+  sanitizePublications(items = []) {
+    if (!Array.isArray(items)) return [];
+    return items.map((item) => {
+      if (!item || typeof item !== 'object') return item;
+      const { password, pin, ...safeAuthor } = item.author || {};
+      return { ...item, author: item.author ? safeAuthor : item.author };
+    });
+  },
+
   getServices(initialData = []) {
-    return this.get(STORAGE_KEYS.SERVICES, initialData);
+    this.purgeLegacySensitiveData();
+    const safe = this.sanitizePublications(this.get(STORAGE_KEYS.SERVICES, initialData));
+    this.set(STORAGE_KEYS.SERVICES, safe);
+    return safe;
   },
 
   saveServices(services) {
-    this.set(STORAGE_KEYS.SERVICES, services);
+    this.set(STORAGE_KEYS.SERVICES, this.sanitizePublications(services));
   },
 
   // Favores solidarios
   getFavors(initialData = []) {
-    return this.get(STORAGE_KEYS.FAVORS, initialData);
+    const safe = this.sanitizePublications(this.get(STORAGE_KEYS.FAVORS, initialData));
+    this.set(STORAGE_KEYS.FAVORS, safe);
+    return safe;
   },
 
   saveFavors(favors) {
-    this.set(STORAGE_KEYS.FAVORS, favors);
+    this.set(STORAGE_KEYS.FAVORS, this.sanitizePublications(favors));
   },
 
   // Emergencias
   getEmergencies(initialData = []) {
-    return this.get(STORAGE_KEYS.EMERGENCIES, initialData);
+    const safe = this.sanitizePublications(this.get(STORAGE_KEYS.EMERGENCIES, initialData));
+    this.set(STORAGE_KEYS.EMERGENCIES, safe);
+    return safe;
   },
 
   saveEmergencies(emergencies) {
-    this.set(STORAGE_KEYS.EMERGENCIES, emergencies);
+    this.set(STORAGE_KEYS.EMERGENCIES, this.sanitizePublications(emergencies));
   },
 
   // Modo de la aplicación (NORMAL | EMERGENCY)
@@ -179,11 +122,19 @@ export const storageService = {
 
   // Perfil del Vecino
   getUserProfile(defaultUser = null) {
-    return this.get(STORAGE_KEYS.USER_PROFILE, defaultUser);
+    this.purgeLegacySensitiveData();
+    const profile = this.get(STORAGE_KEYS.USER_PROFILE, defaultUser);
+    if (!profile || typeof profile !== 'object') return defaultUser;
+    const { password, pin, securityQuestions, ...safeProfile } = profile;
+    this.set(STORAGE_KEYS.USER_PROFILE, safeProfile);
+    try { localStorage.removeItem(STORAGE_KEYS.REGISTERED_USERS); } catch {}
+    return safeProfile;
   },
 
   saveUserProfile(profile) {
-    this.set(STORAGE_KEYS.USER_PROFILE, profile);
+    if (!profile || typeof profile !== 'object') return;
+    const { password, pin, securityQuestions, ...safeProfile } = profile;
+    this.set(STORAGE_KEYS.USER_PROFILE, safeProfile);
   },
 
   clearUserProfile() {
@@ -194,87 +145,25 @@ export const storageService = {
     }
   },
 
-  // Directorio local de vecinos registrados (para Iniciar Sesión rápido)
+  // El navegador no es una fuente de autenticación ni almacena credenciales.
   getRegisteredUsers() {
-    return this.get(STORAGE_KEYS.REGISTERED_USERS, DEFAULT_USERS_CATALOG);
+    try { localStorage.removeItem(STORAGE_KEYS.REGISTERED_USERS); } catch {}
+    return [];
   },
 
-  saveRegisteredUser(user) {
-    if (!user) return;
-    const cleanPhone = (user.phone || '').replace(/\D/g, '').slice(-9);
-    const cleanEmail = (user.email || '').trim().toLowerCase();
-    const users = this.getRegisteredUsers();
-    
-    const existingIndex = users.findIndex(u => {
-      if (cleanEmail && u.email && u.email.toLowerCase() === cleanEmail) return true;
-      if (cleanPhone && (u.phone || '').replace(/\D/g, '').slice(-9) === cleanPhone) return true;
-      return false;
-    });
-    
-    const record = {
-      id: user.id || (cleanPhone ? `usr_${cleanPhone}` : `usr_${Date.now()}`),
-      name: user.name || 'Vecino',
-      email: cleanEmail || (cleanPhone ? `${cleanPhone}@barrio.pe` : ''),
-      password: user.password || 'Password123!',
-      phone: cleanPhone || user.phone || '',
-      address: user.address || '',
-      block: user.block || (user.address || 'Pachacamac'),
-      avatar: user.avatar || '',
-      securityQuestions: user.securityQuestions || (existingIndex >= 0 ? users[existingIndex].securityQuestions : null) || {
-        q1: 'boby',
-        q2: 'ceviche',
-        q3: 'san martin',
-      },
-      lat: user.lat || -12.0464,
-      lng: user.lng || -77.0428,
-      isRegistered: true,
-      isVerifiedNeighbor: true,
-    };
-
-    if (existingIndex >= 0) {
-      users[existingIndex] = { ...users[existingIndex], ...record };
-    } else {
-      users.unshift(record);
-    }
-    this.set(STORAGE_KEYS.REGISTERED_USERS, users);
-    return record;
+  saveRegisteredUser() {
+    return null;
   },
 
-  findRegisteredUser(identifier) {
-    if (!identifier) return null;
-    const clean = identifier.toString().trim();
-    const cleanLower = clean.toLowerCase();
-    const cleanDigits = clean.replace(/\D/g, '').slice(-9);
-    const users = this.getRegisteredUsers();
-    
-    return users.find(u => {
-      if (u.email && u.email.toLowerCase() === cleanLower) return true;
-      const uDigits = (u.phone || '').replace(/\D/g, '').slice(-9);
-      if (cleanDigits.length >= 6 && uDigits === cleanDigits) return true;
-      if (u.name && u.name.toLowerCase().includes(cleanLower)) return true;
-      return false;
-    }) || null;
+  findRegisteredUser() {
+    return null;
   },
 
-  updateUserPassword(identifier, newPassword) {
-    if (!identifier || !newPassword) return false;
-    const cleanLower = identifier.toString().trim().toLowerCase();
-    const cleanDigits = identifier.toString().replace(/\D/g, '').slice(-9);
-    const users = this.getRegisteredUsers();
-    const idx = users.findIndex(u => 
-      (u.email && u.email.toLowerCase() === cleanLower) ||
-      (cleanDigits.length >= 6 && (u.phone || '').replace(/\D/g, '').slice(-9) === cleanDigits) ||
-      (u.name && u.name.toLowerCase() === cleanLower)
-    );
-    if (idx >= 0) {
-      users[idx] = { ...users[idx], password: newPassword, pin: newPassword };
-      this.set(STORAGE_KEYS.REGISTERED_USERS, users);
-      return true;
-    }
+  updateUserPassword() {
     return false;
   },
 
-  updateUserPin(phone, newPin) {
-    return this.updateUserPassword(phone, newPin);
+  updateUserPin() {
+    return false;
   }
 };
