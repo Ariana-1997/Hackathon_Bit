@@ -458,10 +458,25 @@ export function NeighborhoodProvider({ children }) {
         return;
       }
       try {
+        const catKey = (category || '').toString().toLowerCase().trim();
+        // Mapeo a IDs de def_categoria (ámbito NECESIDAD: 13 a 21)
+        const emergencyCatMap = {
+          vulnerable: 21,          // CUIDADO_DEPENDIENTES
+          primeros_auxilios: 18,   // ATENCION_MEDICA
+          agua_alimento: 14,       // AGUA
+          alimento: 13,            // ALIMENTOS
+          medicamentos: 15,        // MEDICAMENTOS
+          abrigo: 16,              // ABRIGO
+          albergue: 17,            // ALBERGUE
+          generador_luz: 17,       // ALBERGUE
+          rescate: 20,             // TRANSPORTE_EMERGENCIA
+        };
+        const mappedCatId = emergencyCatMap[catKey] || (Number(category) >= 13 && Number(category) <= 21 ? Number(category) : 14);
+
         const created = await apiService.reportarEmergencia({
           tipo: 'ALERTA_EMERGENCIA',
-          categoriaId: Number(category) || 1,
-          descripcion: baseItem.description,
+          categoriaId: mappedCatId,
+          descripcion: baseItem.description || baseItem.title || 'Alerta de auxilio vecinal',
           numeroPersonas: 1,
           lat: Number(baseItem.lat),
           lng: Number(baseItem.lng),
@@ -509,55 +524,85 @@ export function NeighborhoodProvider({ children }) {
     const safeProfileInput = { ...newProfile };
     delete safeProfileInput.password;
     delete safeProfileInput.securityQuestions;
-    const updated = {
-      id: currentUser?.id || `usr_${Date.now()}`,
-      avatar: newProfile.avatar !== undefined ? newProfile.avatar : (currentUser?.avatar || ''),
-      ...safeProfileInput,
-      lat: targetLat,
-      lng: targetLng,
-      isRegistered: true,
-    };
-    setCurrentUser(updated);
-    storageService.saveUserProfile(updated);
 
-    // Persistir cambios de perfil únicamente mediante la API Spring Boot.
-    try {
-      if (apiService.token) {
-        await apiService.actualizarPerfil(updated.name, updated.phone);
+    // Caso 1: Actualización de perfil existente con sesión activa
+    if (apiService.token) {
+      try {
+        const cleanPhone = (newProfile.phone || '').replace(/\D/g, '').slice(-9) || null;
+        await apiService.actualizarPerfil(safeProfileInput.name, cleanPhone);
         if (targetLat !== null && targetLng !== null && Number.isFinite(Number(targetLat)) && Number.isFinite(Number(targetLng))) {
           await apiService.actualizarUbicacion(Number(targetLat), Number(targetLng));
         }
-      } else if (newProfile.email && submittedPassword) {
+
+        const updated = {
+          id: currentUser?.id || `usr_${Date.now()}`,
+          avatar: newProfile.avatar !== undefined ? newProfile.avatar : (currentUser?.avatar || ''),
+          ...safeProfileInput,
+          phone: cleanPhone || '',
+          lat: targetLat,
+          lng: targetLng,
+          isRegistered: true,
+        };
+        setCurrentUser(updated);
+        storageService.saveUserProfile(updated);
+        showToast('Perfil actualizado correctamente en el servidor.', 'success');
+        return true;
+      } catch (error) {
+        showToast(`No se pudo actualizar el perfil: ${error.message}`, 'error');
+        return false;
+      }
+    }
+
+    // Caso 2: Nuevo registro de usuario con credenciales
+    if (newProfile.email && submittedPassword) {
+      try {
+        const rawPhone = (newProfile.phone || '').replace(/\D/g, '').slice(-9);
+        const cleanPhone = rawPhone.length === 9 ? rawPhone : null;
+
         await apiService.registro({
           email: newProfile.email.trim().toLowerCase(),
           password: submittedPassword,
           nombre: newProfile.name.trim(),
-          telefono: ((newProfile.phone || '').replace(/\D/g, '').slice(-9)) || null,
+          telefono: cleanPhone,
         });
-        await apiService.login(newProfile.email.trim().toLowerCase(), submittedPassword);
-        if (targetLat !== null && targetLng !== null) {
-          await apiService.actualizarUbicacion(Number(targetLat), Number(targetLng));
+
+        const sesion = await apiService.login(newProfile.email.trim().toLowerCase(), submittedPassword);
+
+        if (targetLat !== null && targetLng !== null && Number.isFinite(Number(targetLat)) && Number.isFinite(Number(targetLng))) {
+          await apiService.actualizarUbicacion(Number(targetLat), Number(targetLng)).catch(() => {});
         }
-      } else {
-        throw new Error('Completa correo y contraseña para registrar la cuenta.');
+
+        const updated = {
+          id: sesion?.perfil?.id || `usr_${Date.now()}`,
+          avatar: newProfile.avatar || '',
+          ...safeProfileInput,
+          phone: cleanPhone || '',
+          lat: targetLat,
+          lng: targetLng,
+          isRegistered: true,
+        };
+
+        setCurrentUser(updated);
+        storageService.saveUserProfile(updated);
+        showToast('🎉 Cuenta creada y autenticada con éxito.', 'success');
+
+        if (pendingAction) {
+          const actionToExecute = pendingAction;
+          setPendingAction(null);
+          setTimeout(() => {
+            actionToExecute();
+          }, 250);
+        }
+        return true;
+      } catch (error) {
+        // En caso de fallo, NO marcar como registrado ni guardar en el navegador
+        showToast(`Error al registrarse: ${error.message}`, 'error');
+        return false;
       }
-      setCurrentUser({ ...updated });
-      showToast('Perfil guardado mediante el backend.', 'success');
-    } catch (error) {
-      console.warn('Backend profile update note:', error.message);
-      showToast(`Aviso del backend: ${error.message || 'Error de conexión'}`, 'warning');
-      return true;
     }
 
-    // Si había una acción pendiente (ej: publicar o visto bueno), ejecutarla automáticamente
-    if (pendingAction) {
-      const actionToExecute = pendingAction;
-      setPendingAction(null);
-      setTimeout(() => {
-        actionToExecute();
-      }, 250);
-    }
-    return true;
+    showToast('Completa correo y contraseña para crear tu cuenta.', 'warning');
+    return false;
   };
 
   const loginUser = async (userProfile) => {
