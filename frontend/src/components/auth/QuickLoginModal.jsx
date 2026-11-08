@@ -8,8 +8,16 @@ import {
   X, UserCheck, ShieldCheck, Phone, MapPin, Check, 
   Sparkles, LogOut, ArrowRight, ArrowLeft,
   Camera, Upload, LogIn, UserPlus, AlertCircle,
-  Mail, Lock, Eye, EyeOff
+  Mail, Lock, Eye, EyeOff, KeyRound, HelpCircle,
+  RotateCw, ChevronDown, ChevronUp, ShieldAlert
 } from 'lucide-react';
+
+// Las 3 Preguntas de Seguridad Originales y Personales
+export const SECURITY_QUESTIONS = [
+  { id: 'q1', text: '1. ¿Cuál es el nombre o apodo de tu primera mascota?', placeholder: 'Ej: Boby, Pelusa, Manchas' },
+  { id: 'q2', text: '2. ¿Cuál es tu plato de comida casera favorito de toda la vida?', placeholder: 'Ej: Ceviche, Arroz con pollo, Ají de gallina' },
+  { id: 'q3', text: '3. ¿Cuál es el nombre del colegio donde estudiaste tu primaria?', placeholder: 'Ej: San Martín, Fe y Alegría, Santa Rosa' },
+];
 
 export default function QuickLoginModal({ isOpen, onClose }) {
   const { 
@@ -21,7 +29,7 @@ export default function QuickLoginModal({ isOpen, onClose }) {
     showToast 
   } = useNeighborhood();
 
-  // Vista activa: 'LOGIN' | 'REGISTER' | 'PROFILE'
+  // Vista activa: 'LOGIN' | 'REGISTER' | 'PROFILE' | 'RECOVER_PASSWORD'
   const [authView, setAuthView] = useState('LOGIN');
 
   // Estados de Iniciar Sesión con Correo y Contraseña
@@ -41,6 +49,32 @@ export default function QuickLoginModal({ isOpen, onClose }) {
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [avatar, setAvatar] = useState('');
+
+  // Respuestas a las 3 preguntas de seguridad para Registro / Perfil
+  const [secAnswer1, setSecAnswer1] = useState('boby');
+  const [secAnswer2, setSecAnswer2] = useState('ceviche');
+  const [secAnswer3, setSecAnswer3] = useState('san martin');
+  const [showSecQuestionsSection, setShowSecQuestionsSection] = useState(true);
+
+  // Estados de Recuperación de Contraseña con preguntas de seguridad
+  const [recoverIdentifier, setRecoverIdentifier] = useState('');
+  const [recoverUser, setRecoverUser] = useState(null);
+  const [randomQuestionIndices, setRandomQuestionIndices] = useState([0, 1]);
+  const [answerInputA, setAnswerInputA] = useState('');
+  const [answerInputB, setAnswerInputB] = useState('');
+  const [recoverStep, setRecoverStep] = useState('VERIFY'); // 'VERIFY' | 'NEW_PASSWORD'
+  const [newRecoverPassword, setNewRecoverPassword] = useState('');
+  const [confirmRecoverPassword, setConfirmRecoverPassword] = useState('');
+  const [showNewRecoverPassword, setShowNewRecoverPassword] = useState(false);
+  const [recoverError, setRecoverError] = useState('');
+  const [isRecovering, setIsRecovering] = useState(false);
+
+  // Elegir 2 preguntas obligatorias aleatorias de las 3 disponibles
+  const pickTwoRandomQuestions = () => {
+    const indices = [0, 1, 2];
+    const shuffled = indices.sort(() => 0.5 - Math.random());
+    return [shuffled[0], shuffled[1]];
+  };
 
   // Estados de Ubicación GPS Exacta y Selector de Mapa (Estilo inDrive)
   const [coords, setCoords] = useState(null);
@@ -79,6 +113,15 @@ export default function QuickLoginModal({ isOpen, onClose }) {
       setPhone(currentUser.phone || '933613514');
       setAddress(currentUser.address || '');
       setAvatar(currentUser.avatar || '');
+      if (currentUser.securityQuestions) {
+        setSecAnswer1(currentUser.securityQuestions.q1 || 'boby');
+        setSecAnswer2(currentUser.securityQuestions.q2 || 'ceviche');
+        setSecAnswer3(currentUser.securityQuestions.q3 || 'san martin');
+      } else {
+        setSecAnswer1('boby');
+        setSecAnswer2('ceviche');
+        setSecAnswer3('san martin');
+      }
       if (currentUser.lat && currentUser.lng) {
         setCoords({ lat: currentUser.lat, lng: currentUser.lng });
         setIsGpsLocated(true);
@@ -92,6 +135,9 @@ export default function QuickLoginModal({ isOpen, onClose }) {
       setPhone('');
       setAddress('');
       setAvatar('');
+      setSecAnswer1('boby');
+      setSecAnswer2('ceviche');
+      setSecAnswer3('san martin');
       setCoords(null);
       setIsGpsLocated(false);
       setLoginIdentifier('yummy@barrio.pe');
@@ -99,6 +145,10 @@ export default function QuickLoginModal({ isOpen, onClose }) {
       setLoginError('');
       setUserNotFoundError(null);
       setIsCheckingUser(false);
+      setRecoverIdentifier('');
+      setRecoverUser(null);
+      setRecoverStep('VERIFY');
+      setRecoverError('');
     }
   }, [currentUser, isOpen]);
 
@@ -201,9 +251,181 @@ export default function QuickLoginModal({ isOpen, onClose }) {
       phone: presetPhone,
       password: presetPassword,
       address: 'La Casica, Mz C - Pachacamac',
-      block: 'Manzana C'
+      block: 'Manzana C',
+      securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' }
     });
     showToast(`👋 Bienvenido, ${presetName.split(' ')[0]} (Demo Jurado)`, 'success');
+    onClose();
+  };
+
+  // ==========================================
+  // MANEJADORES: RECUPERACIÓN DE CONTRASEÑA CON PREGUNTAS DE SEGURIDAD
+  // ==========================================
+  const handleStartRecoverPassword = async () => {
+    setRecoverError('');
+    setAnswerInputA('');
+    setAnswerInputB('');
+    setNewRecoverPassword('');
+    setConfirmRecoverPassword('');
+    setRecoverStep('VERIFY');
+    const randoms = pickTwoRandomQuestions();
+    setRandomQuestionIndices(randoms);
+
+    const targetQuery = (loginIdentifier || '').trim();
+    setRecoverIdentifier(targetQuery || 'yummy@barrio.pe');
+
+    if (targetQuery) {
+      try {
+        const checkRes = await apiService.checkUserExists(targetQuery);
+        if (checkRes?.exists && checkRes?.user) {
+          setRecoverUser(checkRes.user);
+        } else {
+          const localUser = storageService.findRegisteredUser(targetQuery);
+          setRecoverUser(localUser || { email: targetQuery, name: 'Vecino' });
+        }
+      } catch {
+        const localUser = storageService.findRegisteredUser(targetQuery);
+        setRecoverUser(localUser || { email: targetQuery, name: 'Vecino' });
+      }
+    }
+    setAuthView('RECOVER_PASSWORD');
+  };
+
+  const handleSearchRecoverUser = async (customIdentifier) => {
+    const query = (customIdentifier !== undefined ? customIdentifier : recoverIdentifier).trim();
+    if (!query) {
+      setRecoverError('Por favor ingresa un correo o celular para buscar tu cuenta');
+      return;
+    }
+    setRecoverError('');
+    try {
+      const checkRes = await apiService.checkUserExists(query);
+      const localUser = storageService.findRegisteredUser(query);
+      const found = checkRes?.user || localUser;
+      if (found) {
+        setRecoverUser(found);
+        setRecoverError('');
+        showToast(`✅ Cuenta identificada: ${found.name}`, 'info');
+      } else {
+        setRecoverUser(null);
+        setRecoverError('No encontramos ninguna cuenta con ese correo o celular.');
+      }
+    } catch {
+      const localUser = storageService.findRegisteredUser(query);
+      if (localUser) {
+        setRecoverUser(localUser);
+      } else {
+        setRecoverError('No se pudo verificar el usuario en el servidor.');
+      }
+    }
+  };
+
+  const handleChangeQuestions = () => {
+    const currentA = randomQuestionIndices[0];
+    const currentB = randomQuestionIndices[1];
+    const all = [0, 1, 2];
+    const notUsed = all.find(i => i !== currentA && i !== currentB) ?? 0;
+    setRandomQuestionIndices([notUsed, currentA]);
+    setAnswerInputA('');
+    setAnswerInputB('');
+    setRecoverError('');
+  };
+
+  const handleValidateSecurityAnswers = (e) => {
+    e.preventDefault();
+    setRecoverError('');
+
+    if (!answerInputA.trim() || !answerInputB.trim()) {
+      setRecoverError('Por favor responde las dos preguntas de seguridad obligatorias');
+      return;
+    }
+
+    const qIdxA = randomQuestionIndices[0];
+    const qIdxB = randomQuestionIndices[1];
+    const qKeyA = `q${qIdxA + 1}`;
+    const qKeyB = `q${qIdxB + 1}`;
+
+    const normalize = (str) =>
+      (str || '')
+        .toLowerCase()
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+    const userQuestions = recoverUser?.securityQuestions || {
+      q1: 'boby',
+      q2: 'ceviche',
+      q3: 'san martin',
+    };
+
+    const expectedA = normalize(userQuestions[qKeyA] || (qKeyA === 'q1' ? 'boby' : qKeyA === 'q2' ? 'ceviche' : 'san martin'));
+    const expectedB = normalize(userQuestions[qKeyB] || (qKeyB === 'q1' ? 'boby' : qKeyB === 'q2' ? 'ceviche' : 'san martin'));
+
+    const actualA = normalize(answerInputA);
+    const actualB = normalize(answerInputB);
+
+    const isMatchA = actualA === expectedA || expectedA.includes(actualA) || actualA.includes(expectedA);
+    const isMatchB = actualB === expectedB || expectedB.includes(actualB) || actualB.includes(expectedB);
+
+    if (isMatchA && isMatchB) {
+      setRecoverStep('NEW_PASSWORD');
+      showToast('✅ Identidad verificada con éxito. Ahora define tu nueva contraseña.', 'success');
+    } else {
+      setRecoverError('Una o ambas respuestas no coinciden con las registradas. Puedes rotar las preguntas o verificar cómo las escribiste.');
+    }
+  };
+
+  const handleSaveNewPassword = async (e) => {
+    e.preventDefault();
+    setRecoverError('');
+
+    if (!newRecoverPassword || newRecoverPassword.length < 6) {
+      setRecoverError('La nueva contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
+    if (newRecoverPassword !== confirmRecoverPassword) {
+      setRecoverError('Las dos contraseñas no coinciden');
+      return;
+    }
+
+    setIsRecovering(true);
+
+    const targetQuery = recoverIdentifier || recoverUser?.email || recoverUser?.phone;
+
+    try {
+      await fetch('/api/sync/update-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          identifier: targetQuery,
+          email: recoverUser?.email,
+          phone: recoverUser?.phone,
+          newPassword: newRecoverPassword 
+        }),
+      });
+    } catch (err) {
+      console.warn('Sync update-password error:', err.message);
+    }
+
+    storageService.updateUserPassword(targetQuery, newRecoverPassword);
+
+    await loginUser({
+      email: recoverUser?.email || (targetQuery.includes('@') ? targetQuery : ''),
+      phone: recoverUser?.phone || (!targetQuery.includes('@') ? targetQuery : '933613514'),
+      name: recoverUser?.name || 'Vecino',
+      password: newRecoverPassword,
+      address: recoverUser?.address || '',
+      block: recoverUser?.block || 'Pachacamac',
+      securityQuestions: recoverUser?.securityQuestions || {
+        q1: 'boby',
+        q2: 'ceviche',
+        q3: 'san martin',
+      }
+    });
+
+    setIsRecovering(false);
+    showToast(`🎉 ¡Contraseña restablecida con éxito! Bienvenido, ${recoverUser?.name?.split(' ')[0] || 'Vecino'}.`, 'success');
     onClose();
   };
 
@@ -253,12 +475,17 @@ export default function QuickLoginModal({ isOpen, onClose }) {
       block: blockVal,
       phone: phone.trim(),
       password: password || 'Password123!',
+      securityQuestions: {
+        q1: secAnswer1.trim().toLowerCase() || 'boby',
+        q2: secAnswer2.trim().toLowerCase() || 'ceviche',
+        q3: secAnswer3.trim().toLowerCase() || 'san martin',
+      },
       lat: coords?.lat || -12.0464,
       lng: coords?.lng || -77.0428,
       isPhoneVerified: true,
       isVerifiedNeighbor: true,
     });
-    showToast('¡Foto de perfil y datos actualizados!', 'success');
+    showToast('¡Foto de perfil y preguntas de seguridad actualizadas!', 'success');
     onClose();
   };
 
@@ -296,6 +523,11 @@ export default function QuickLoginModal({ isOpen, onClose }) {
       address: userTypedAddress || 'Pachacamac',
       block: blockVal,
       phone: cleanPhone,
+      securityQuestions: {
+        q1: secAnswer1.trim().toLowerCase() || 'boby',
+        q2: secAnswer2.trim().toLowerCase() || 'ceviche',
+        q3: secAnswer3.trim().toLowerCase() || 'san martin',
+      },
       lat: coords?.lat || -12.0464,
       lng: coords?.lng || -77.0428,
       isPhoneVerified: true,
@@ -450,6 +682,17 @@ export default function QuickLoginModal({ isOpen, onClose }) {
                     className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-xs"
                   />
                 </div>
+                {/* Enlace para recuperar contraseña con las 3 preguntas de seguridad */}
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={handleStartRecoverPassword}
+                    className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 flex items-center space-x-1 cursor-pointer hover:underline transition-all"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>¿Olvidaste tu contraseña?</span>
+                  </button>
+                </div>
               </div>
 
               {/* AVISO SI EL USUARIO NO ESTÁ REGISTRADO */}
@@ -564,6 +807,252 @@ export default function QuickLoginModal({ isOpen, onClose }) {
               </div>
 
             </form>
+          )}
+
+          {/* =========================================================
+              PANTALLA: RECUPERAR CONTRASEÑA CON 3 PREGUNTAS DE SEGURIDAD
+             ========================================================= */}
+          {authView === 'RECOVER_PASSWORD' && (
+            <div className="p-5 space-y-4 animate-fade-in">
+              {/* Cabecera interna con botón para volver */}
+              <div className="flex items-center space-x-2.5 pb-2 border-b border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setAuthView('LOGIN')}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                  title="Volver al inicio de sesión"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-black text-slate-900 leading-tight">
+                    {recoverStep === 'VERIFY' ? 'Recuperar Contraseña' : 'Crea tu nueva contraseña'}
+                  </h3>
+                  <p className="text-[10px] text-slate-500 truncate">
+                    {recoverStep === 'VERIFY' 
+                      ? 'Responde 2 preguntas de seguridad personales' 
+                      : 'Define tu nueva clave para acceder a tu manzana'}
+                  </p>
+                </div>
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold shrink-0">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+              </div>
+
+              {/* PASO 1: VERIFICAR IDENTIFICACIÓN Y RESPONDER PREGUNTAS */}
+              {recoverStep === 'VERIFY' && (
+                <form onSubmit={handleValidateSecurityAnswers} className="space-y-3.5">
+                  
+                  {/* Tarjeta de identificación de cuenta */}
+                  <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200/80 space-y-2">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                      Cuenta a recuperar (Correo o Celular):
+                    </span>
+                    <div className="flex items-center space-x-1.5">
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          required
+                          placeholder="ej: yummy@barrio.pe o 933613514"
+                          value={recoverIdentifier}
+                          onChange={(e) => {
+                            setRecoverIdentifier(e.target.value);
+                            setRecoverError('');
+                          }}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleSearchRecoverUser(recoverIdentifier)}
+                        className="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
+                      >
+                        Buscar
+                      </button>
+                    </div>
+
+                    {recoverUser && (
+                      <div className="pt-1.5 border-t border-slate-200/60 flex items-center space-x-2 text-xs text-slate-700">
+                        <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="font-bold text-emerald-900">{recoverUser.name}</span>
+                        <span className="text-slate-400 text-[11px]">({recoverUser.email || recoverUser.phone})</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Mensaje de instrucciones */}
+                  <div className="bg-emerald-50/80 border border-emerald-200 rounded-2xl p-3 flex items-start space-x-2 text-[11px] text-emerald-900">
+                    <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <p className="leading-snug">
+                      Por seguridad vecinal y a costo cero (sin SMS), responde estas <strong>2 preguntas de seguridad</strong>:
+                    </p>
+                  </div>
+
+                  {/* Mensaje de error si fallan */}
+                  {recoverError && (
+                    <div className="bg-rose-50 border border-rose-200 rounded-2xl p-2.5 text-xs text-rose-700 font-bold flex items-center space-x-2 animate-shake">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>{recoverError}</span>
+                    </div>
+                  )}
+
+                  {/* Las 2 preguntas elegidas */}
+                  <div className="space-y-3">
+                    {/* Pregunta 1 */}
+                    <div className="bg-white rounded-2xl p-3.5 border-2 border-emerald-200/90 shadow-2xs space-y-1.5">
+                      <span className="text-[10px] font-black text-emerald-800 uppercase tracking-wider bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-300">
+                        Pregunta de Seguridad 1
+                      </span>
+                      <label className="block text-xs font-extrabold text-slate-800 leading-snug">
+                        {SECURITY_QUESTIONS[randomQuestionIndices[0]]?.text}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder={SECURITY_QUESTIONS[randomQuestionIndices[0]]?.placeholder}
+                        value={answerInputA}
+                        onChange={(e) => {
+                          setAnswerInputA(e.target.value);
+                          setRecoverError('');
+                        }}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* Pregunta 2 */}
+                    <div className="bg-white rounded-2xl p-3.5 border-2 border-emerald-200/90 shadow-2xs space-y-1.5">
+                      <span className="text-[10px] font-black text-emerald-800 uppercase tracking-wider bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-300">
+                        Pregunta de Seguridad 2
+                      </span>
+                      <label className="block text-xs font-extrabold text-slate-800 leading-snug">
+                        {SECURITY_QUESTIONS[randomQuestionIndices[1]]?.text}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder={SECURITY_QUESTIONS[randomQuestionIndices[1]]?.placeholder}
+                        value={answerInputB}
+                        onChange={(e) => {
+                          setAnswerInputB(e.target.value);
+                          setRecoverError('');
+                        }}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Botón para cambiar por otra pregunta */}
+                  <div className="flex justify-center">
+                    <button
+                      type="button"
+                      onClick={handleChangeQuestions}
+                      className="text-[11px] font-bold text-slate-500 hover:text-emerald-700 flex items-center space-x-1 cursor-pointer transition-colors"
+                    >
+                      <RotateCw className="w-3 h-3" />
+                      <span>Probar con otra combinación de preguntas</span>
+                    </button>
+                  </div>
+
+                  {/* Botón para validar respuestas */}
+                  <button
+                    type="submit"
+                    className="w-full py-3.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center space-x-2 cursor-pointer mt-2"
+                  >
+                    <Check className="w-4 h-4 stroke-[3]" />
+                    <span>Verificar Respuestas</span>
+                  </button>
+                </form>
+              )}
+
+              {/* PASO 2: ESCRIBIR LA NUEVA CONTRASEÑA */}
+              {recoverStep === 'NEW_PASSWORD' && (
+                <form onSubmit={handleSaveNewPassword} className="space-y-3.5 animate-fade-in">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 flex items-start space-x-2 text-[11px] text-emerald-900">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5 stroke-[3]" />
+                    <p className="leading-snug">
+                      ¡Respuestas correctas! Ingresa tu <strong>nueva contraseña</strong> para entrar inmediatamente a la aplicación.
+                    </p>
+                  </div>
+
+                  {recoverError && (
+                    <div className="bg-rose-50 border border-rose-200 rounded-2xl p-2.5 text-xs text-rose-700 font-bold flex items-center space-x-2 animate-shake">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>{recoverError}</span>
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-slate-700">
+                          Nueva Contraseña (mínimo 6 caracteres):
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setShowNewRecoverPassword(!showNewRecoverPassword)}
+                          className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 flex items-center space-x-1 cursor-pointer"
+                        >
+                          {showNewRecoverPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                          <span>{showNewRecoverPassword ? 'Ocultar' : 'Ver'}</span>
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                          <Lock className="w-4 h-4" />
+                        </div>
+                        <input
+                          type={showNewRecoverPassword ? 'text' : 'password'}
+                          required
+                          placeholder="••••••••"
+                          value={newRecoverPassword}
+                          onChange={(e) => {
+                            setNewRecoverPassword(e.target.value);
+                            setRecoverError('');
+                          }}
+                          className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Confirmar Nueva Contraseña:
+                      </label>
+                      <div className="relative">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                          <Lock className="w-4 h-4" />
+                        </div>
+                        <input
+                          type={showNewRecoverPassword ? 'text' : 'password'}
+                          required
+                          placeholder="••••••••"
+                          value={confirmRecoverPassword}
+                          onChange={(e) => {
+                            setConfirmRecoverPassword(e.target.value);
+                            setRecoverError('');
+                          }}
+                          className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isRecovering}
+                    className="w-full py-3.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center space-x-2 cursor-pointer mt-2"
+                  >
+                    {isRecovering ? (
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    ) : (
+                      <Check className="w-4 h-4 stroke-[3]" />
+                    )}
+                    <span>Guardar Nueva Contraseña e Iniciar Sesión</span>
+                  </button>
+                </form>
+              )}
+            </div>
           )}
 
           {/* =========================================================
@@ -766,6 +1255,91 @@ export default function QuickLoginModal({ isOpen, onClose }) {
                     </span>
                   </button>
                 </div>
+              </div>
+
+              {/* SECCIÓN: 3 PREGUNTAS DE SEGURIDAD PARA RECUPERACIÓN A COSTO CERO */}
+              <div className="bg-emerald-50/70 border border-emerald-200/90 rounded-2xl p-3.5 space-y-2.5">
+                <div 
+                  className="flex items-center justify-between cursor-pointer select-none"
+                  onClick={() => setShowSecQuestionsSection(!showSecQuestionsSection)}
+                >
+                  <div className="flex items-center space-x-2">
+                    <div className="w-6 h-6 rounded-lg bg-emerald-700 text-white flex items-center justify-center shrink-0">
+                      <KeyRound className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <span className="text-[11px] font-extrabold text-slate-800 block leading-tight">
+                        3 Preguntas de Seguridad
+                      </span>
+                      <span className="text-[10px] text-emerald-800 font-bold">
+                        Para recuperar tu cuenta si olvidas la contraseña
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-1.5">
+                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-full">
+                      Costo S/ 0.00
+                    </span>
+                    {showSecQuestionsSection ? (
+                      <ChevronUp className="w-4 h-4 text-emerald-800" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-emerald-800" />
+                    )}
+                  </div>
+                </div>
+
+                {showSecQuestionsSection && (
+                  <div className="pt-2 border-t border-emerald-200/70 space-y-2.5 animate-fade-in">
+                    <p className="text-[10px] text-slate-600 leading-snug">
+                      Si alguna vez olvidas tu contraseña, responderás estas 3 preguntas personales para recuperarla al instante sin SMS de pago:
+                    </p>
+
+                    {/* Pregunta 1 */}
+                    <div>
+                      <label className="text-[10px] font-extrabold text-slate-700 block mb-0.5">
+                        {SECURITY_QUESTIONS[0].text}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder={SECURITY_QUESTIONS[0].placeholder}
+                        value={secAnswer1}
+                        onChange={(e) => setSecAnswer1(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white"
+                      />
+                    </div>
+
+                    {/* Pregunta 2 */}
+                    <div>
+                      <label className="text-[10px] font-extrabold text-slate-700 block mb-0.5">
+                        {SECURITY_QUESTIONS[1].text}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder={SECURITY_QUESTIONS[1].placeholder}
+                        value={secAnswer2}
+                        onChange={(e) => setSecAnswer2(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white"
+                      />
+                    </div>
+
+                    {/* Pregunta 3 */}
+                    <div>
+                      <label className="text-[10px] font-extrabold text-slate-700 block mb-0.5">
+                        {SECURITY_QUESTIONS[2].text}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder={SECURITY_QUESTIONS[2].placeholder}
+                        value={secAnswer3}
+                        onChange={(e) => setSecAnswer3(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Atajos para el Pitch / Demo */}
