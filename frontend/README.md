@@ -1,87 +1,61 @@
-# 🤝 Entre Vecinos - Red Barrial Hiperlocal (PWA)
+# RedVecinal – Frontend
 
-> **Plataforma web comunitaria para conectar oficios de confianza, solidaridad vecinal y auxilio ante emergencias.**  
-> Diseñada para el distrito de **Pachacamac (Lima, Perú)** con arquitectura **Offline-First**, publicación rápida en **3 clics**, enlace directo a **WhatsApp personal** y sincronización en la nube con **Spring Boot 3 + Supabase PostgreSQL**.
+Aplicación React + Vite para RedVecinal.
 
----
+## Arquitectura de datos
 
-## 🌟 Funcionalidades Principales
+El navegador se comunica exclusivamente con la API REST de **Spring Boot** mediante `/api/v1`.
+Spring Boot es el único componente que accede a PostgreSQL/Supabase y a Supabase Auth/Storage usando credenciales privadas del backend.
 
-### 1. 💼 Economía Local & Oficios de Cuadra
-* **Directorio Hiperlocal (<300m):** Encuentra gasfiteros, electricistas, cerrajeros y técnicos en tu propia manzana o cuadra.
-* **Contacto Directo por WhatsApp:** Al hacer clic en *"Contactar por WhatsApp"*, se abre directamente el chat con el número registrado del vecino (`wa.me/51...`) con un mensaje precargado.
-* **Visto Bueno Vecinal:** Calificación social comunitaria respaldada por vecinos reales de la zona.
+- Frontend React: interfaz y caché local no sensible.
+- Backend Spring Boot: autenticación, validaciones, permisos y operaciones de negocio.
+- PostgreSQL/Supabase: persistencia; solo el backend mantiene credenciales privadas.
+- `server.js`: sirve los archivos estáticos y reenvía únicamente `/api/v1`, `/actuator` y documentación Swagger a Spring Boot. No guarda usuarios ni publicaciones y no se conecta a Supabase.
+- No se deben crear variables `VITE_SUPABASE_*` ni copiar `SUPABASE_SERVICE_ROLE_KEY` al frontend.
 
-### 2. 🛡️ Autenticación y Seguridad a Costo Cero
-* **Registro e Inicio de Sesión por Correo y Contraseña:** Validación estricta sin costos de SMS ni APIs pagadas.
-* **Selector de Ubicación Estilo inDrive:** Mapa interactivo con pin arrastrable para fijar las coordenadas exactas de la vivienda.
-* **Cuentas Demo para el Jurado:** Botones de acceso rápido en 1 toque para probar los perfiles del jurado (*Renato Solis*, *Yummy Untiveros*, *Carlos Mendoza*).
+## Requisitos
 
-### 3. 🤝 Cadena de Favores Solidarios
-* Préstamo de herramientas (taladros, escaleras, podadoras).
-* Ayuda comunitaria en compras o asistencia a adultos mayores a costo S/ 0.
+- Node.js 20 o superior.
+- Backend Spring Boot iniciado en `http://localhost:8080`.
+- Configuración de Supabase únicamente en `backend/.env` o en las variables privadas del entorno donde se despliegue Spring Boot.
 
-### 4. 🚨 Modo Emergencia & Red de Auxilio SOS
-* **Metamorfosis Visual Inmediata:** La interfaz cambia a modo alerta con un solo toque ante emergencias vecinales o cortes de suministros.
-* **Red de Voluntarios SOS:** Vecinos con oficios críticos listos para apoyar ante crisis.
-* **Directorio Rápido:** Acceso directo a números de emergencia (Policía 105, Bomberos 116, Serenazgo).
+## Desarrollo local
 
-### 5. 📡 Resiliencia Offline (PWA)
-* **Arquitectura Offline-First:** La aplicación sigue abriendo y funcionando aun cuando no haya conexión a internet en la zona.
-* **Service Worker con Auto-Sincronización:** Guarda publicaciones en cola local y las sincroniza en cuanto recupera señal.
+1. En `frontend`, copia `.env.example` a `.env`.
+2. Confirma que `VITE_BACKEND_URL=http://localhost:8080`.
+3. Instala dependencias y arranca Vite:
 
----
+   ```bash
+   npm install
+   npm run dev
+   ```
 
-## 🚀 Arquitectura Tecnológica
+4. Abre `http://localhost:3000`.
 
-| Capa | Tecnologías |
-| :--- | :--- |
-| **Frontend** | React 18, Vite, Tailwind CSS, Lucide Icons, Leaflet (Mapas), PWA (Service Worker) |
-| **Backend en la Nube** | Spring Boot 3 (Java 21) desplegado en **Render** |
-| **Base de Datos Cloud** | **PostgreSQL** con extensiones espaciales **PostGIS** en **Supabase** (`mae_usuario`, `mae_publicacion`) |
-| **Servidor Local & Bridge** | Node.js Server con Reverse Proxy + Base de Datos de Respaldo JSON |
-| **Túnel Seguro PWA** | Cloudflare Tunnel (HTTPS) para acceso móvil |
+Vite reenvía `/api/v1` al backend configurado en `VITE_BACKEND_URL`.
 
----
+## Producción
 
-## 💻 Instalación y Ejecución
+1. Construye el frontend:
 
-### Prerrequisitos
-* Node.js v18 o superior.
-* Gestor de paquetes `npm`.
+   ```bash
+   npm install
+   npm run build
+   ```
 
-### 1. Entrar a la carpeta del Frontend
-```bash
-cd frontend
-```
+2. Configura `BACKEND_URL` con la URL HTTPS pública del backend Spring Boot.
+3. Inicia el servidor estático/proxy:
 
-### 2. Instalar Dependencias
-```bash
-npm install
-```
+   ```bash
+   npm start
+   ```
 
-### 3. Variables de Entorno
-Copia el archivo de ejemplo:
-```bash
-copy .env.example .env
-```
+El frontend debe publicarse con HTTPS y el backend debe tener `CORS_ORIGINS` limitado al dominio real del frontend.
 
-### 4. Modo Desarrollo
-```bash
-npm run dev
-```
+## Seguridad
 
-### 5. Compilación y Servidor de Producción con Sincronización
-```bash
-# Compilar paquete optimizado para producción
-npm run build
-
-# Iniciar el servidor local con proxy a Supabase / Render
-node server.js
-```
-El servidor estará activo en `http://localhost:3000`.
-
----
-
-## 👥 Equipo - Hackathon BIT
-* Proyecto desarrollado para la inclusión digital, reactivación económica barrial y seguridad ciudadana.
+- Nunca subir `.env`, contraseñas, tokens ni claves privadas.
+- `SUPABASE_SERVICE_ROLE_KEY` solo se configura en el backend.
+- El inicio de sesión, registro y recuperación se validan mediante endpoints de Spring Boot.
+- `localStorage` se limita a preferencias/caché; no es fuente de autenticación ni almacena contraseñas o respuestas de seguridad.
+- Si una operación no se confirma desde Spring Boot, la interfaz no debe presentarla como guardada en la nube.
