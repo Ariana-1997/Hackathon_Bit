@@ -2,6 +2,7 @@ import http from 'http';
 import https from 'https';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -11,7 +12,45 @@ const DATA_DIR = path.join(__dirname, 'data');
 const FEED_FILE = path.join(DATA_DIR, 'community_feed.json');
 const USERS_FILE = path.join(DATA_DIR, 'registered_users.json');
 const PORT = 3000;
-const BACKEND_HOST = 'hackathon-bit-uc0e.onrender.com';
+
+// Configuración dinámica del backend del equipo (Spring Boot - por defecto http://localhost:8080)
+const BACKEND_URL_RAW = process.env.BACKEND_URL || process.env.VITE_BACKEND_URL || 'http://localhost:8080';
+let backendParsed;
+try {
+  backendParsed = new URL(BACKEND_URL_RAW.startsWith('http') ? BACKEND_URL_RAW : `http://${BACKEND_URL_RAW}`);
+} catch {
+  backendParsed = new URL('http://localhost:8080');
+}
+const BACKEND_PROTOCOL = backendParsed.protocol === 'https:' ? https : http;
+const BACKEND_HOST = backendParsed.hostname;
+const BACKEND_PORT = backendParsed.port ? parseInt(backendParsed.port, 10) : (backendParsed.protocol === 'https:' ? 443 : 80);
+
+// Configuración de Supabase Cloud Oficial (Proyecto Hackathon-Bit)
+const SUPABASE_HOST = process.env.SUPABASE_HOST || 'jphuvrsupoelyyxaifby.supabase.co';
+const SUPABASE_SECRET = process.env.SUPABASE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const DEFAULT_ZONA_ID = process.env.DEFAULT_ZONA_ID || '5a064c5e-ac87-4f54-bebb-a0d8f7034b50';
+
+async function supabaseRequest(endpoint, method = 'GET', body = null) {
+  try {
+    const res = await fetch(`https://${SUPABASE_HOST}${endpoint}`, {
+      method,
+      headers: {
+        'apikey': SUPABASE_SECRET,
+        'Authorization': `Bearer ${SUPABASE_SECRET}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = text; }
+    return { ok: res.ok, status: res.status, data };
+  } catch (err) {
+    console.warn('[Supabase Direct REST Error]:', err.message);
+    return { ok: false, error: err.message };
+  }
+}
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -22,15 +61,15 @@ if (!fs.existsSync(FEED_FILE)) {
 }
 
 const SEED_USERS = [
-  { id: 'usr_carlos_mendoza', name: 'Carlos Mendoza', email: 'carlos.mendoza@barrio.pe', phone: '987654321', password: 'Password123!', block: 'Manzana B', address: 'Calle Los Álamos 142' },
-  { id: 'usr_yummy_untiveros', name: 'Yummy Untiveros', email: 'yummy@barrio.pe', phone: '933613514', password: 'Password123!', block: 'Manzana C', address: 'La Casica - Pachacamac' },
-  { id: 'usr_dona_rosa', name: 'Doña Rosa Quispe', email: 'dona.rosa@barrio.pe', phone: '911222333', password: 'Password123!', block: 'Manzana A', address: 'Pasaje San Martín 12' },
-  { id: 'usr_pedro_castillo', name: 'Pedro Castillo', email: 'pedro.castillo@barrio.pe', phone: '955443322', password: 'Password123!', block: 'Manzana D', address: 'Sector 3' },
-  { id: 'usr_jean', name: 'Jean', email: 'jean@barrio.pe', phone: '902322768', password: 'Password123!', block: 'Manzana C', address: 'Pachacamac' },
-  { id: 'usr_sofia', name: 'Sofía Valdivia', email: 'sofia@barrio.pe', phone: '933445566', password: 'Password123!', block: 'Calle Los Pinos 110', address: 'Calle Los Pinos 110' },
-  { id: 'usr_lucia_fernandez', name: 'Lucia Fernandez', email: 'lucia.fernandez@barrio.pe', phone: '976543210', password: 'Password123!', block: 'Manzana B', address: 'Av. Pachacamac 45' },
-  { id: 'usr_961024198', name: 'Renato Solis', email: 'renato@barrio.pe', phone: '961024198', password: 'Password123!', block: 'Manzana C', address: 'La Casica, Mz C - Pachacamac' },
-  { id: 'usr_933613515', name: 'Sandra', email: 'sandra@barrio.pe', phone: '933613515', password: 'Password123!', block: 'Manzana C', address: 'Pachacamac' },
+  { id: 'usr_carlos_mendoza', name: 'Carlos Mendoza', email: 'carlos.mendoza@barrio.pe', phone: '987654321', password: 'Password123!', block: 'Manzana B', address: 'Calle Los Álamos 142', securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' } },
+  { id: 'usr_yummy_untiveros', name: 'Yummy Untiveros', email: 'yummy@barrio.pe', phone: '933613514', password: 'Password123!', block: 'Manzana C', address: 'La Casica - Pachacamac', securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' } },
+  { id: 'usr_dona_rosa', name: 'Doña Rosa Quispe', email: 'dona.rosa@barrio.pe', phone: '911222333', password: 'Password123!', block: 'Manzana A', address: 'Pasaje San Martín 12', securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' } },
+  { id: 'usr_pedro_castillo', name: 'Pedro Castillo', email: 'pedro.castillo@barrio.pe', phone: '955443322', password: 'Password123!', block: 'Manzana D', address: 'Sector 3', securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' } },
+  { id: 'usr_jean', name: 'Jean', email: 'jean@barrio.pe', phone: '902322768', password: 'Password123!', block: 'Manzana C', address: 'Pachacamac', securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' } },
+  { id: 'usr_sofia', name: 'Sofía Valdivia', email: 'sofia@barrio.pe', phone: '933445566', password: 'Password123!', block: 'Calle Los Pinos 110', address: 'Calle Los Pinos 110', securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' } },
+  { id: 'usr_lucia_fernandez', name: 'Lucia Fernandez', email: 'lucia.fernandez@barrio.pe', phone: '976543210', password: 'Password123!', block: 'Manzana B', address: 'Av. Pachacamac 45', securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' } },
+  { id: 'usr_961024198', name: 'Renato Solis', email: 'renato@barrio.pe', phone: '961024198', password: 'Password123!', block: 'Manzana C', address: 'La Casica, Mz C - Pachacamac', securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' } },
+  { id: 'usr_933613515', name: 'Sandra', email: 'sandra@barrio.pe', phone: '933613515', password: 'Password123!', block: 'Manzana C', address: 'Pachacamac', securityQuestions: { q1: 'boby', q2: 'ceviche', q3: 'san martin' } },
 ];
 
 if (!fs.existsSync(USERS_FILE)) {
@@ -48,20 +87,20 @@ const MIME_TYPES = {
   '.ico': 'image/x-icon',
 };
 
-// Función para reenviar peticiones hacia el backend en Render
+// Función para reenviar peticiones hacia el backend Spring Boot del equipo
 function proxyToBackend(req, res) {
   const options = {
     hostname: BACKEND_HOST,
-    port: 443,
+    port: BACKEND_PORT,
     path: req.url,
     method: req.method,
     headers: {
       ...req.headers,
-      host: BACKEND_HOST,
+      host: `${BACKEND_HOST}:${BACKEND_PORT}`,
     },
   };
 
-  const proxyReq = https.request(options, (proxyRes) => {
+  const proxyReq = BACKEND_PROTOCOL.request(options, (proxyRes) => {
     res.writeHead(proxyRes.statusCode, {
       ...proxyRes.headers,
       'access-control-allow-origin': '*',
@@ -72,120 +111,151 @@ function proxyToBackend(req, res) {
   });
 
   proxyReq.on('error', (err) => {
-    console.error('[Proxy Error]:', err.message);
+    console.warn(`[Proxy Fallback]: Backend no conectado en ${BACKEND_HOST}:${BACKEND_PORT} (${err.message})`);
     res.writeHead(502, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Error conectando al backend', detail: err.message }));
+    res.end(JSON.stringify({ error: 'Backend no conectado', detail: err.message }));
   });
 
   req.pipe(proxyReq, { end: true });
 }
 
-// Registrar usuario directamente en Supabase mae_usuario
+// Registrar o asegurar usuario directamente en Supabase mae_usuario
 async function bridgeUserToSupabase(user) {
   try {
     const authorName = user.name || 'Vecino';
     const rawPhone = user.phone || '999999999';
     const authorPhone = rawPhone.replace(/\D/g, '').slice(-9).padStart(9, '9');
-    const email = (user.email || `${authorPhone}@barrio.pe`).trim().toLowerCase();
-    const password = user.password || 'Password123!';
 
-    const regRes = await fetch(`https://${BACKEND_HOST}/api/v1/auth/registro`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email,
-        password,
-        nombre: authorName,
-        telefono: authorPhone,
-        tipoCuenta: 'PRESTADOR',
-      }),
+    // 1. Verificar si ya existe en mae_usuario
+    const existing = await supabaseRequest(`/rest/v1/mae_usuario?telefono=eq.${authorPhone}&select=id,nombre,telefono`);
+    if (existing.ok && Array.isArray(existing.data) && existing.data.length > 0) {
+      console.log(`[Supabase Cloud] ✅ Usuario existente en mae_usuario: "${existing.data[0].nombre}" (ID: ${existing.data[0].id})`);
+      return existing.data[0].id;
+    }
+
+    // 2. Crear credenciales en Supabase Auth con email_confirm=true (sin enviar correos molestos)
+    const cleanEmail = (user.email || `vecino_${authorPhone}@barrio.pe`).trim().toLowerCase();
+    const adminUserRes = await supabaseRequest('/auth/v1/admin/users', 'POST', {
+      email: cleanEmail,
+      password: user.password || 'Password123!',
+      email_confirm: true,
+      user_metadata: { name: authorName, phone: authorPhone }
     });
-    const regData = await regRes.json();
-    console.log(`[Supabase Cloud User Bridge DETAIL] Status: ${regRes.status}, Email: ${email}, Phone: ${authorPhone}, Response:`, JSON.stringify(regData));
-    return regData;
+
+    let authUserId = adminUserRes.data?.id;
+    if (!authUserId) {
+      const existingAuth = await supabaseRequest('/auth/v1/admin/users');
+      if (existingAuth.ok && Array.isArray(existingAuth.data?.users)) {
+        const found = existingAuth.data.users.find(u => u.email === cleanEmail);
+        if (found) authUserId = found.id;
+      }
+    }
+    if (!authUserId) {
+      authUserId = '8e767002-bc2f-4115-98e3-d8fd270df311';
+    }
+
+    // 3. Insertar nuevo usuario en mae_usuario con el auth_user_id real
+    const newUserId = crypto.randomUUID();
+    const insertRes = await supabaseRequest('/rest/v1/mae_usuario', 'POST', {
+      id: newUserId,
+      auth_user_id: authUserId,
+      nombre: authorName,
+      telefono: authorPhone,
+      zona_id: DEFAULT_ZONA_ID,
+      ubicacion: `POINT(${user.lng || -77.0428} ${user.lat || -12.0464})`,
+      estado: 'ACTIVO',
+      version: 0,
+    });
+
+    if (insertRes.ok) {
+      console.log(`[Supabase Cloud] 🎉 Nuevo vecino guardado en mae_usuario: "${authorName}" (ID: ${newUserId}, Tel: ${authorPhone})`);
+      return newUserId;
+    } else {
+      console.warn('[Supabase Cloud Insert Warning]:', insertRes.status, insertRes.data);
+    }
   } catch (err) {
-    console.warn('[Supabase Cloud User Bridge Notice]:', err.message);
+    console.warn('[Supabase Cloud User Bridge Error]:', err.message);
   }
 }
 
-// Puente automático para guardar publicaciones en Supabase
+// Puente automático para guardar publicaciones y detalles en Supabase mae_publicacion y det_servicio
 async function bridgeToSupabase(item) {
   try {
     const authorName = item.author?.name || 'Vecino';
     const rawPhone = item.author?.phone || '999999999';
     const authorPhone = rawPhone.replace(/\D/g, '').slice(-9).padStart(9, '9');
-    const slug = authorName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10);
-    const email = item.author?.email || `${slug || 'vecino'}.${authorPhone.slice(-4)}@barrio.pe`;
-    const password = item.author?.password || 'Password123!';
 
-    // 1. Asegurar registro en mae_usuario
-    await bridgeUserToSupabase({ name: authorName, phone: authorPhone, email, password });
+    // 1. Obtener o crear el autor en mae_usuario
+    let authorId = await bridgeUserToSupabase({ name: authorName, phone: authorPhone, address: item.author?.address || item.address });
+    if (!authorId) {
+      authorId = 'bf048b95-afbb-4f89-ab34-58a860e3a7a0';
+    }
 
-    // 2. Iniciar sesión para obtener token
-    const loginRes = await fetch(`https://${BACKEND_HOST}/api/v1/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
+    // Mapeo de categorías
+    const catMap = {
+      plomeria: 29, gasfiteria: 29, electricidad: 30, carpinteria: 31,
+      albanileria: 32, pintura: 33, jardineria: 34, limpieza: 35,
+      mecanica: 36, belleza: 37, comidas: 40, otros: 7,
+      herramientas: 9, materiales: 10, habilidades: 11, transporte: 12, ayuda: 8
+    };
+    const catKey = (item.category || '').toLowerCase();
+    const categoriaId = catMap[catKey] || 7;
 
-    if (!loginRes.ok) return;
-    const loginData = await loginRes.json();
-    const token = loginData.accessToken;
-    if (!token) return;
+    const pubId = crypto.randomUUID();
+    const lat = item.lat || -12.0464;
+    const lng = item.lng || -77.0428;
 
-    // 3. Vincular zona por GPS (RF10)
-    await fetch(`https://${BACKEND_HOST}/api/v1/usuarios/me/ubicacion`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({ lat: -12.0464, lng: -77.0428 }),
-    }).catch(() => {});
+    const isFavor = item.type === 'FAVOR';
+    const pubPayload = {
+      id: pubId,
+      autor_id: authorId,
+      zona_id: DEFAULT_ZONA_ID,
+      modulo: isFavor ? 'SOLIDARIDAD' : 'ECONOMIA',
+      tipo: isFavor ? 'SOLICITUD_AYUDA' : 'SERVICIO',
+      categoria_id: isFavor ? (catMap[catKey] || 8) : categoriaId,
+      titulo: item.title,
+      descripcion: item.description || 'Publicado mediante la Red Barrial Entre Vecinos.',
+      ubicacion: `POINT(${lng} ${lat})`,
+      estado: 'ACTIVA',
+      version: 0,
+    };
 
-    // 4. Insertar en mae_publicacion
-    if (item.type === 'SERVICE') {
-      const pubRes = await fetch(`https://${BACKEND_HOST}/api/v1/servicios`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          categoriaId: 4,
-          titulo: item.title,
-          descripcion: item.description,
-          nombreComercial: item.title,
-          telefonoContacto: authorPhone,
-          precioDesde: 15.0,
-          tarifaDetalle: item.priceNote || 'Precio a coordinar',
-          lat: -12.0464,
-          lng: -77.0428,
-        }),
-      });
-      const pubData = await pubRes.json();
-      console.log(`[Supabase Cloud Auto-Bridge] ✅ Guardado en mae_publicacion: "${item.title}" (ID: ${pubData.id}) de ${authorName}`);
-    } else if (item.type === 'FAVOR') {
-      const favRes = await fetch(`https://${BACKEND_HOST}/api/v1/solidaridad`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          tipo: 'SOLICITUD_AYUDA',
-          categoriaId: 4,
-          titulo: item.title,
-          descripcion: item.description,
-          lat: -12.0464,
-          lng: -77.0428,
-        }),
-      });
-      const favData = await favRes.json();
-      console.log(`[Supabase Cloud Auto-Bridge] ✅ Favor guardado en mae_publicacion (ID: ${favData.id}) de ${authorName}`);
+    const pubRes = await supabaseRequest('/rest/v1/mae_publicacion', 'POST', pubPayload);
+
+    if (pubRes.ok) {
+      console.log(`[Supabase Cloud Bridge] ✅ Guardado en mae_publicacion: "${item.title}" (ID: ${pubId})`);
+
+      if (!isFavor) {
+        // Insertar en det_servicio con teléfono WhatsApp y dirección exacta
+        const srvRes = await supabaseRequest('/rest/v1/det_servicio', 'POST', {
+          publicacion_id: pubId,
+          nombre_comercial: item.title,
+          telefono_contacto: authorPhone,
+          direccion_texto: item.address || item.author?.address || item.author?.block || 'Pachacamac, Lima',
+          moneda: 'PEN',
+          precio_desde: 15.0,
+          tarifa_detalle: item.priceNote || 'A coordinar por WhatsApp',
+          promedio_valoracion: 5.0,
+          total_valoraciones: 1,
+        });
+        if (srvRes.ok) {
+          console.log(`[Supabase Cloud Bridge] ✅ Detalle de servicio guardado en det_servicio para: "${item.title}"`);
+        }
+      } else {
+        // Insertar en det_solidaridad
+        const solRes = await supabaseRequest('/rest/v1/det_solidaridad', 'POST', {
+          publicacion_id: pubId,
+          fotos_rutas: [],
+        });
+        if (solRes.ok) {
+          console.log(`[Supabase Cloud Bridge] ✅ Detalle solidario guardado en det_solidaridad para: "${item.title}"`);
+        }
+      }
+    } else {
+      console.warn('[Supabase Cloud Pub Warning]:', pubRes.status, pubRes.data);
     }
   } catch (err) {
-    console.warn('[Supabase Cloud Auto-Bridge Warning]:', err.message);
+    console.warn('[Supabase Direct Bridge Exception]:', err.message);
   }
 }
 
@@ -295,7 +365,12 @@ const server = http.createServer((req, res) => {
             password: user.password || 'Password123!',
             block: user.block || 'Manzana C',
             address: user.address || 'Pachacamac',
-            avatar: user.avatar || ''
+            avatar: user.avatar || '',
+            securityQuestions: user.securityQuestions || (idx >= 0 ? users[idx].securityQuestions : null) || {
+              q1: 'boby',
+              q2: 'ceviche',
+              q3: 'san martin',
+            }
           };
 
           if (idx >= 0) {
@@ -322,17 +397,21 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Actualización de PIN por recuperación o perfil
-  if (req.url === '/api/sync/update-pin' && req.method === 'POST') {
+  // Actualización de Contraseña o PIN por recuperación o perfil
+  if ((req.url === '/api/sync/update-password' || req.url === '/api/sync/update-pin') && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
-    req.on('end', () => {
+    req.on('end', async () => {
       try {
-        const { phone, newPin } = JSON.parse(body);
-        const clean = (phone || '').replace(/\D/g, '').slice(-9);
-        if (!clean || !newPin) {
+        const payload = JSON.parse(body);
+        const { identifier, email, phone, newPassword, newPin } = payload;
+        const passToSet = newPassword || newPin;
+        const cleanLower = (identifier || email || '').trim().toLowerCase();
+        const cleanDigits = (identifier || phone || '').replace(/\D/g, '').slice(-9);
+
+        if ((!cleanLower && !cleanDigits) || !passToSet) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Datos incompletos' }));
+          res.end(JSON.stringify({ error: 'Datos incompletos para actualizar la contraseña' }));
           return;
         }
 
@@ -340,15 +419,41 @@ const server = http.createServer((req, res) => {
         if (fs.existsSync(USERS_FILE)) {
           users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
         }
-        const idx = users.findIndex(u => (u.phone || '').replace(/\D/g, '').slice(-9) === clean);
+        const idx = users.findIndex(u => 
+          (cleanLower && u.email && u.email.toLowerCase() === cleanLower) ||
+          (cleanDigits.length >= 6 && (u.phone || '').replace(/\D/g, '').slice(-9) === cleanDigits)
+        );
+
+        let userFound = null;
         if (idx >= 0) {
-          users[idx].pin = newPin;
+          users[idx].password = passToSet;
+          users[idx].pin = passToSet;
+          userFound = users[idx];
           fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
         }
 
-        console.log(`[PIN Reset] ✅ PIN actualizado para ${clean}: ${newPin}`);
+        // Si el usuario existe en Supabase Auth, sincronizar también en la nube
+        try {
+          const targetEmail = cleanLower || userFound?.email;
+          if (targetEmail) {
+            const authList = await supabaseRequest('/auth/v1/admin/users');
+            if (authList.ok && Array.isArray(authList.data?.users)) {
+              const suUser = authList.data.users.find(u => u.email === targetEmail);
+              if (suUser?.id) {
+                await supabaseRequest(`/auth/v1/admin/users/${suUser.id}`, 'PUT', {
+                  password: passToSet
+                });
+                console.log(`[Supabase Auth] 🔑 Contraseña actualizada en la nube para ${targetEmail}`);
+              }
+            }
+          }
+        } catch (suErr) {
+          console.warn('[Supabase Auth Password Sync Warning]:', suErr.message);
+        }
+
+        console.log(`[Password Reset] ✅ Contraseña actualizada para "${cleanLower || cleanDigits}": ${passToSet}`);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, phone: clean, pin: newPin }));
+        res.end(JSON.stringify({ success: true, user: userFound, newPassword: passToSet }));
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err.message }));
@@ -441,5 +546,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`[OK] Servidor de producción local + Sincronización + Supabase Bridge en http://localhost:${PORT}`);
-  console.log(`[OK] Proxy activo: /api/* y /actuator/* -> https://${BACKEND_HOST}`);
+  console.log(`[OK] Proxy activo: /api/* y /actuator/* -> ${backendParsed.origin}`);
 });
