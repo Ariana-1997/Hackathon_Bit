@@ -1,11 +1,11 @@
 /**
  * RedVecinal API Service
- * Conexión completa entre el Frontend React y el Backend Spring Boot 3 + Supabase
- * Desplegado en: https://hackathon-bit-uc0e.onrender.com
+ * Conexión configurable entre el Frontend React y el Backend Spring Boot 3 + Supabase
+ * Por defecto apunta al backend local del equipo (http://localhost:8080) o al configurado en VITE_BACKEND_URL
  */
 
-const CLOUD_BACKEND_URL = 'https://hackathon-bit-uc0e.onrender.com';
-const API_BASE_URL = '/api/v1';
+const CLOUD_BACKEND_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_BACKEND_URL) || 'http://localhost:8080';
+const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || '/api/v1';
 
 const TOKEN_KEY = 'redvecinal_auth_token';
 const REFRESH_KEY = 'redvecinal_refresh_token';
