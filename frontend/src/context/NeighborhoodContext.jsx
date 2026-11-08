@@ -1,11 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { APP_MODES, PUBLICATION_TYPES } from '../types';
-import { 
-  INITIAL_USER, 
-  INITIAL_SERVICES, 
-  INITIAL_FAVORS, 
-  INITIAL_EMERGENCIES 
-} from '../data/mockData';
+import { INITIAL_USER, INITIAL_SERVICES, INITIAL_FAVORS, INITIAL_EMERGENCIES } from '../data/mockData';
 import { storageService } from '../services/storageService';
 import { apiService } from '../services/apiService';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
@@ -19,7 +14,7 @@ export function NeighborhoodProvider({ children }) {
   const [appMode, setAppMode] = useState(() => storageService.getAppMode(APP_MODES.NORMAL));
   
   // Usuario actual persistido (null = Modo Visitante / Sin registrarse)
-  const [currentUser, setCurrentUser] = useState(() => storageService.getUserProfile(null));
+  const [currentUser, setCurrentUser] = useState(() => apiService.token ? storageService.getUserProfile(null) : null);
 
   // Datos principales
   const [services, setServices] = useState(() => storageService.getServices(INITIAL_SERVICES));
@@ -74,80 +69,72 @@ export function NeighborhoodProvider({ children }) {
     };
   }, []);
 
-  // Sincronización continua y en tiempo real con la base de datos Supabase
+  // La información compartida se consulta exclusivamente a través de Spring Boot.
+  // localStorage se utiliza solo como caché de lectura para preferencias/datos previamente cargados.
   useEffect(() => {
     let isMounted = true;
 
-    const syncRealSupabaseData = async () => {
+    const loadBackendData = async () => {
+      if (!apiService.token) {
+        return;
+      }
       try {
-        const cloudServices = await apiService.fetchCloudServices();
-        if (isMounted && cloudServices && cloudServices.length > 0) {
-          setServices((prev) => {
-            const cloudIds = new Set(cloudServices.map(c => c.id));
-            const localOnly = prev.filter(p => !cloudIds.has(p.id));
-            const merged = [...cloudServices, ...localOnly];
-            storageService.saveServices(merged);
-            return merged;
-          });
-          setBackendOnline(true);
+        const [cloudServices, solidarityResponse, emergencyResponse] = await Promise.all([
+          apiService.fetchCloudServices(),
+          apiService.getSolidaridad({ page: 0, size: 50 }),
+          apiService.getEmergencias(),
+        ]);
+        if (!isMounted) return;
+
+        if (Array.isArray(cloudServices)) {
+          setServices(cloudServices);
+          storageService.saveServices(cloudServices);
         }
-      } catch (err) {
-        console.warn('Real Supabase sync warning:', err.message);
+
+        const solidarityItems = solidarityResponse?.contenido || [];
+        const mappedFavors = solidarityItems.map((item) => ({
+          id: item.id,
+          title: item.titulo,
+          description: item.resumen || '',
+          type: item.tipo,
+          category: item.categoriaNombre || 'solidaridad',
+          author: { name: item.autorNombre || 'Vecino' },
+          lat: item.lat,
+          lng: item.lng,
+          createdAt: item.createdAt,
+          status: item.estado,
+        }));
+        setFavors(mappedFavors);
+        storageService.saveFavors(mappedFavors);
+
+        const mappedEmergencies = (emergencyResponse || []).map((item) => ({
+          id: item.id,
+          title: item.tipo === 'ALERTA_EMERGENCIA' ? 'Alerta de emergencia' : 'Necesidad crítica',
+          description: item.descripcion,
+          priority: item.prioridad,
+          resolved: item.estado === 'ATENDIDA' || item.estado === 'CERRADA',
+          confirmedVolunteers: 0,
+          lat: item.lat,
+          lng: item.lng,
+          createdAt: item.createdAt,
+          author: { name: 'Vecino' },
+        }));
+        setEmergencies(mappedEmergencies);
+        storageService.saveEmergencies(mappedEmergencies);
+        setBackendOnline(true);
+      } catch (error) {
+        console.warn('No se pudo cargar la información desde Spring Boot:', error.message);
+        if (isMounted) setBackendOnline(false);
       }
     };
 
-    syncRealSupabaseData();
-    const interval = setInterval(syncRealSupabaseData, 8000);
+    loadBackendData();
+    const interval = setInterval(loadBackendData, 30000);
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, []);
-
-  // Sincronización comunitaria en tiempo real entre celulares y computadoras
-  useEffect(() => {
-    let isMounted = true;
-
-    const syncLiveFeed = async () => {
-      try {
-        const feed = await apiService.fetchCommunityFeed();
-        if (!isMounted || !feed) return;
-
-        if (feed.services && feed.services.length > 0) {
-          setServices((prev) => {
-            const existingIds = new Set(prev.map((s) => s.id));
-            const newItems = feed.services.filter((s) => !existingIds.has(s.id));
-            return newItems.length > 0 ? [...newItems, ...prev] : prev;
-          });
-        }
-
-        if (feed.favors && feed.favors.length > 0) {
-          setFavors((prev) => {
-            const existingIds = new Set(prev.map((f) => f.id));
-            const newItems = feed.favors.filter((f) => !existingIds.has(f.id));
-            return newItems.length > 0 ? [...newItems, ...prev] : prev;
-          });
-        }
-
-        if (feed.emergencies && feed.emergencies.length > 0) {
-          setEmergencies((prev) => {
-            const existingIds = new Set(prev.map((e) => e.id));
-            const newItems = feed.emergencies.filter((e) => !existingIds.has(e.id));
-            return newItems.length > 0 ? [...newItems, ...prev] : prev;
-          });
-        }
-      } catch {
-        // Silencioso
-      }
-    };
-
-    syncLiveFeed();
-    const interval = setInterval(syncLiveFeed, 3500);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, []);
+  }, [currentUser]);
 
   // Notificación tipo toast sutil
   const [toastMessage, setToastMessage] = useState(null);
@@ -233,7 +220,7 @@ export function NeighborhoodProvider({ children }) {
             endorsementsCount: item.endorsementsCount + 1,
             endorsements: [newEndorsement, ...(item.endorsements || [])],
           };
-          apiService.syncPublication({ ...updatedItem, type: 'SERVICE' });
+
           return updatedItem;
         }
         return item;
@@ -269,7 +256,7 @@ export function NeighborhoodProvider({ children }) {
             ...item,
             endorsements: updatedEndorsements,
           };
-          apiService.syncPublication({ ...updatedItem, type: 'SERVICE' });
+
           return updatedItem;
         }
         return item;
@@ -293,7 +280,7 @@ export function NeighborhoodProvider({ children }) {
             endorsementsCount: Math.max(0, item.endorsementsCount - 1),
             endorsements: updatedEndorsements,
           };
-          apiService.syncPublication({ ...updatedItem, type: 'SERVICE' });
+
           return updatedItem;
         }
         return item;
@@ -368,9 +355,18 @@ export function NeighborhoodProvider({ children }) {
     );
   };
 
-  // Publicación rápida de 3 clics con guardado real en Supabase
+  // Publicación rápida: toda escritura se confirma en Spring Boot
   const addPublication = async ({ type, category, title, description, priceNote, availableInEmergency, isAvailableNow, address: customPubAddress }) => {
-    const userToUse = currentUser || INITIAL_USER;
+    if (!currentUser || !apiService.token) {
+      showToast('Inicia sesión con una cuenta real para publicar.', 'warning');
+      setLoginModalOpen(true);
+      return;
+    }
+    if (!isOnline) {
+      showToast('Sin conexión: la publicación no se envió. Inténtalo cuando vuelva internet.', 'warning');
+      return;
+    }
+    const userToUse = currentUser;
     const finalLocation = customPubAddress || userToUse.address || userToUse.block || 'Pachacamac';
     const detectedBlock = finalLocation.match(/(?:Manzana|Mz\.?)\s*([A-Za-z0-9]+)/i);
     const authorBlock = detectedBlock ? `Manzana ${detectedBlock[1].toUpperCase()}` : (userToUse.block || finalLocation);
@@ -382,7 +378,6 @@ export function NeighborhoodProvider({ children }) {
         name: userToUse.name,
         email: userToUse.email || '',
         phone: userToUse.phone,
-        password: userToUse.password || 'Password123!',
         address: finalLocation,
         block: authorBlock,
         avatar: userToUse.avatar,
@@ -392,15 +387,11 @@ export function NeighborhoodProvider({ children }) {
       category,
       description: description || 'Publicado mediante publicación rápida en 3 clics.',
       distanceMeters: Math.floor(Math.random() * 80) + 20, // Hiperlocal <100m
-      lat: (userToUse.lat || -12.0464),
-      lng: (userToUse.lng || -77.0428),
+      lat: userToUse.lat ?? null,
+      lng: userToUse.lng ?? null,
       createdAt: new Date().toISOString(),
       isOfflineCached: !isOnline,
     };
-
-    if (!isOnline) {
-      storageService.addToOfflineQueue(baseItem);
-    }
 
     if (type === PUBLICATION_TYPES.SERVICE) {
       const newService = {
@@ -414,25 +405,25 @@ export function NeighborhoodProvider({ children }) {
         isAvailableNow: isAvailableNow !== undefined ? isAvailableNow : true,
       };
 
-      // Guardar con await y validar resultado real de Supabase
+      // Guardar mediante el backend y confirmar la respuesta
       try {
-        const cloudCreated = await apiService.publicarEnSupabase({ ...newService, type: 'SERVICE' }, userToUse);
+        const cloudCreated = await apiService.publicarEnBackend({ ...newService, type: 'SERVICE' }, userToUse);
         if (cloudCreated && cloudCreated.id) {
           newService.id = cloudCreated.id;
           newService.isCloudSynced = true;
-          showToast('✅ Oficio guardado en la base de datos Supabase', 'success');
+          showToast('Oficio guardado mediante el backend.', 'success');
         } else {
-          showToast('Oficio publicado en red local', 'success');
+          showToast('El backend no devolvió confirmación de guardado.', 'warning');
         }
       } catch (err) {
-        console.error('Error publicando en Supabase:', err);
+        console.error('Error publicando mediante Spring Boot:', err);
         const detail = err.detail || err.message || 'Error al conectar con la base de datos';
-        showToast(`⚠️ Supabase: ${detail}`, 'warning');
+        showToast(`No se pudo guardar en el backend: ${detail}`, 'error');
+        return;
       }
 
       setServices((prev) => [newService, ...prev.filter(s => s.id !== newService.id)]);
       setActiveTab('services');
-      apiService.syncPublication({ ...newService, type: 'SERVICE' });
 
     } else if (type === PUBLICATION_TYPES.FAVOR) {
       const newFavor = {
@@ -444,35 +435,54 @@ export function NeighborhoodProvider({ children }) {
       };
 
       try {
-        const cloudCreated = await apiService.publicarEnSupabase({ ...newFavor, type: 'FAVOR' }, userToUse);
+        const cloudCreated = await apiService.publicarEnBackend({ ...newFavor, type: 'FAVOR' }, userToUse);
         if (cloudCreated && cloudCreated.id) {
           newFavor.id = cloudCreated.id;
           newFavor.isCloudSynced = true;
-          showToast('✅ Favor solidario guardado en Supabase', 'success');
+          showToast('Favor solidario guardado mediante el backend.', 'success');
         } else {
-          showToast('Favor publicado y sincronizado', 'success');
+          showToast('El backend no devolvió confirmación de guardado.', 'warning');
         }
       } catch (err) {
         const detail = err.detail || err.message || 'Error del servidor';
-        showToast(`⚠️ Supabase: ${detail}`, 'warning');
+        showToast(`No se pudo guardar en el backend: ${detail}`, 'error');
+        return;
       }
 
       setFavors((prev) => [newFavor, ...prev.filter(f => f.id !== newFavor.id)]);
       setActiveTab('favors');
-      apiService.syncPublication({ ...newFavor, type: 'FAVOR' });
 
     } else if (type === PUBLICATION_TYPES.EMERGENCY) {
-      const newEmergency = {
-        ...baseItem,
-        priority: 'CRITICAL',
-        needsSupport: 'Se requiere asistencia comunitaria inmediata',
-        confirmedVolunteers: 0,
-        resolved: false,
-      };
-      setEmergencies((prev) => [newEmergency, ...prev]);
-      setActiveTab('emergency');
-      apiService.syncPublication({ ...newEmergency, type: 'EMERGENCY' });
-      showToast('🚨 Alerta SOS comunicada a toda la red', 'warning');
+      if (baseItem.lat === null || baseItem.lng === null) {
+        showToast('Selecciona tu ubicación antes de enviar una alerta SOS.', 'warning');
+        return;
+      }
+      try {
+        const created = await apiService.reportarEmergencia({
+          tipo: 'ALERTA_EMERGENCIA',
+          categoriaId: Number(category) || 1,
+          descripcion: baseItem.description,
+          numeroPersonas: 1,
+          lat: Number(baseItem.lat),
+          lng: Number(baseItem.lng),
+          anonimo: false,
+          datosSensibles: null,
+        });
+        const newEmergency = {
+          ...baseItem,
+          ...created,
+          title: 'Alerta de emergencia',
+          priority: created.prioridad || 'CRITICAL',
+          confirmedVolunteers: 0,
+          resolved: false,
+          author: { name: currentUser.name },
+        };
+        setEmergencies((prev) => [newEmergency, ...prev]);
+        setActiveTab('emergency');
+        showToast('Alerta SOS enviada y confirmada por el backend.', 'warning');
+      } catch (err) {
+        showToast(`No se pudo enviar la alerta SOS: ${err.message}`, 'error');
+      }
     }
   };
 
@@ -482,7 +492,7 @@ export function NeighborhoodProvider({ children }) {
   };
 
   const requireAuth = (callback, reason = 'GENERAL') => {
-    if (currentUser) {
+    if (currentUser && apiService.token) {
       callback();
     } else {
       setLoginReason(reason);
@@ -492,73 +502,53 @@ export function NeighborhoodProvider({ children }) {
   };
 
   const updateUserProfile = async (newProfile) => {
-    const targetLat = newProfile.lat || currentUser?.lat || -12.0464;
-    const targetLng = newProfile.lng || currentUser?.lng || -77.0428;
+    const targetLat = newProfile.lat ?? currentUser?.lat ?? null;
+    const targetLng = newProfile.lng ?? currentUser?.lng ?? null;
 
+    const submittedPassword = newProfile.password;
+    const safeProfileInput = { ...newProfile };
+    delete safeProfileInput.password;
+    delete safeProfileInput.securityQuestions;
     const updated = {
       id: currentUser?.id || `usr_${Date.now()}`,
       avatar: newProfile.avatar !== undefined ? newProfile.avatar : (currentUser?.avatar || ''),
-      ...newProfile,
-      securityQuestions: newProfile.securityQuestions || currentUser?.securityQuestions || {
-        q1: 'boby',
-        q2: 'ceviche',
-        q3: 'san martin',
-      },
+      ...safeProfileInput,
       lat: targetLat,
       lng: targetLng,
       isRegistered: true,
     };
     setCurrentUser(updated);
     storageService.saveUserProfile(updated);
-    storageService.saveRegisteredUser(updated);
 
-    // Registro automático y directo en la base de datos Supabase
-    if (newProfile.name && (newProfile.email || newProfile.phone)) {
-      const cleanDigits = (newProfile.phone || '').replace(/\D/g, '').slice(-9).padStart(9, '9');
-      const cleanSlug = (newProfile.name || 'vecino').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10);
-      const emailToRegister = (newProfile.email || `${cleanSlug}.${cleanDigits.slice(-4)}@barrio.pe`).trim().toLowerCase();
-      const passToRegister = newProfile.password || 'Password123!';
-
-      // Llamada directa al puente del servidor
-      fetch('/api/sync/identify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          name: newProfile.name, 
-          email: emailToRegister,
-          phone: cleanDigits, 
-          password: passToRegister,
-          lat: targetLat, 
-          lng: targetLng,
-          address: newProfile.address,
-          block: newProfile.block,
-          securityQuestions: updated.securityQuestions,
-        }),
-      }).catch(() => {});
-
-      try {
-        const res = await apiService.registro({
-          email: emailToRegister,
-          password: passToRegister,
-          nombre: newProfile.name.trim(),
-          telefono: cleanDigits,
-          tipoCuenta: 'PRESTADOR',
-        });
-        console.log('[Supabase Cloud] Vecino insertado en mae_usuario:', res);
-        // Asociar ubicación GPS para que Spring Boot asocie la zona (RF09 / RF10)
-        await apiService.actualizarUbicacion(targetLat, targetLng).catch(() => {});
-        showToast(`✅ Identidad guardada en Supabase (${newProfile.name.split(' ')[0]})`, 'success');
-      } catch (err) {
-        try {
-          await apiService.login(emailToRegister, passToRegister);
-          await apiService.actualizarUbicacion(targetLat, targetLng).catch(() => {});
-          showToast(`✅ Identidad conectada a Supabase (${newProfile.name.split(' ')[0]})`, 'success');
-        } catch (e2) {
-          console.warn('[Supabase Cloud Sync Warning]:', e2.message);
+    // Persistir cambios de perfil únicamente mediante la API Spring Boot.
+    try {
+      if (apiService.token) {
+        await apiService.actualizarPerfil(updated.name, updated.phone);
+        if (targetLat !== null && targetLng !== null && Number.isFinite(Number(targetLat)) && Number.isFinite(Number(targetLng))) {
+          await apiService.actualizarUbicacion(Number(targetLat), Number(targetLng));
         }
+      } else if (newProfile.email && submittedPassword) {
+        await apiService.registro({
+          email: newProfile.email.trim().toLowerCase(),
+          password: submittedPassword,
+          nombre: newProfile.name.trim(),
+          telefono: ((newProfile.phone || '').replace(/\D/g, '').slice(-9)) || null,
+        });
+        await apiService.login(newProfile.email.trim().toLowerCase(), submittedPassword);
+        if (targetLat !== null && targetLng !== null) {
+          await apiService.actualizarUbicacion(Number(targetLat), Number(targetLng));
+        }
+      } else {
+        throw new Error('Completa correo y contraseña para registrar la cuenta.');
       }
+      setCurrentUser({ ...updated });
+      showToast('Perfil guardado mediante el backend.', 'success');
+    } catch (error) {
+      console.warn('Backend profile update note:', error.message);
+      showToast(`Aviso del backend: ${error.message || 'Error de conexión'}`, 'warning');
+      return true;
     }
-    
+
     // Si había una acción pendiente (ej: publicar o visto bueno), ejecutarla automáticamente
     if (pendingAction) {
       const actionToExecute = pendingAction;
@@ -567,75 +557,35 @@ export function NeighborhoodProvider({ children }) {
         actionToExecute();
       }, 250);
     }
+    return true;
   };
 
   const loginUser = async (userProfile) => {
-    const rawPhone = userProfile.phone || '';
-    const cleanDigits = rawPhone.replace(/\D/g, '').slice(-9);
-    const cleanEmail = (userProfile.email || '').trim().toLowerCase();
-    const matched = (cleanEmail ? storageService.findRegisteredUser(cleanEmail) : null) || 
-                    (cleanDigits ? storageService.findRegisteredUser(cleanDigits) : null) || 
-                    storageService.findRegisteredUser(userProfile.name);
-
+    if (!apiService.token) {
+      throw new Error('La sesión no está autenticada por el backend.');
+    }
+    const profile = userProfile?.perfil || userProfile || {};
     const updated = {
-      id: matched?.id || userProfile.id || (cleanDigits ? `usr_${cleanDigits}` : `usr_${Date.now()}`),
-      name: matched?.name || userProfile.name || (cleanDigits ? `Vecino (${cleanDigits})` : 'Vecino Registrado'),
-      email: cleanEmail || matched?.email || (cleanDigits ? `${cleanDigits}@barrio.pe` : ''),
-      password: userProfile.password || matched?.password || 'Password123!',
-      phone: cleanDigits || matched?.phone || '',
-      address: matched?.address || userProfile.address || '',
-      block: matched?.block || userProfile.block || (userProfile.address || 'Pachacamac'),
-      avatar: matched?.avatar || userProfile.avatar || '',
-      securityQuestions: matched?.securityQuestions || userProfile.securityQuestions || {
-        q1: 'boby',
-        q2: 'ceviche',
-        q3: 'san martin',
-      },
-      lat: userProfile.lat || -12.0464,
-      lng: userProfile.lng || -77.0428,
-      isPhoneVerified: true,
+      id: profile.id,
+      name: profile.nombre || userProfile.name || 'Vecino',
+      email: userProfile.email || '',
+      phone: profile.telefono || userProfile.phone || '',
+      address: '',
+      block: profile.zona?.nombre || '',
+      avatar: '',
+      lat: profile.lat ?? null,
+      lng: profile.lng ?? null,
+      isPhoneVerified: false,
       isVerifiedNeighbor: true,
       isRegistered: true,
     };
-
     setCurrentUser(updated);
     storageService.saveUserProfile(updated);
-    storageService.saveRegisteredUser(updated);
-
-    // Registro/verificación en segundo plano con el puente del servidor
-    fetch('/api/sync/identify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        name: updated.name, 
-        email: updated.email, 
-        phone: updated.phone,
-        password: updated.password,
-        address: updated.address,
-        block: updated.block,
-        securityQuestions: updated.securityQuestions,
-      }),
-    }).catch(() => {});
-
-    // Iniciar sesión y garantizar zona GPS activa
-    try {
-      await apiService.ensureSession(updated);
-    } catch {}
-
-    showToast(`👋 ¡Bienvenido de vuelta, ${updated.name.split(' ')[0]}!`, 'success');
-
-    if (pendingAction) {
-      const actionToExecute = pendingAction;
-      setPendingAction(null);
-      setTimeout(() => {
-        actionToExecute();
-      }, 250);
-    }
-
     return updated;
   };
 
-  const logoutUser = () => {
+  const logoutUser = async () => {
+    await apiService.logout();
     setCurrentUser(null);
     storageService.clearUserProfile();
     showToast('Has cambiado a Modo Invitado (Sin registrar)', 'info');
