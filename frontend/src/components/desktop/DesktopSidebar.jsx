@@ -42,7 +42,7 @@ export default function DesktopSidebar() {
           </div>
           <div>
             <h1 className="font-extrabold text-lg text-slate-900 leading-tight tracking-tight flex items-center space-x-1.5">
-              <span>Entre Vecinos</span>
+              <span>Red Vecinal</span>
             </h1>
             <div className="mt-1">
               {backendOnline ? (
