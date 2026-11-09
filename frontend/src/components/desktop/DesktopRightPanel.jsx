@@ -111,7 +111,7 @@ export default function DesktopRightPanel() {
                 Centrales de Auxilio
               </h3>
               <p className={`text-[11px] ${isEmergency ? 'text-rose-300' : 'text-slate-500'}`}>
-                Pachacamac & Lurín
+                Comunidad Vecinal
               </p>
             </div>
           </div>
@@ -135,7 +135,7 @@ export default function DesktopRightPanel() {
             <div className="flex items-center space-x-2.5">
               <Shield className={`w-4 h-4 ${isEmergency ? 'text-rose-400' : 'text-rose-600'}`} />
               <div>
-                <p className="font-bold text-[11px] leading-tight">Serenazgo Pachacamac</p>
+                <p className="font-bold text-[11px] leading-tight">Central de Seguridad Vecinal</p>
                 <p className={`text-[10px] font-mono ${isEmergency ? 'text-rose-300' : 'text-slate-500'}`}>(01) 231-1555</p>
               </div>
             </div>
@@ -249,10 +249,10 @@ export default function DesktopRightPanel() {
       <div className="p-3.5 bg-gradient-to-br from-emerald-800 to-emerald-900 rounded-3xl text-white shadow-sm text-xs space-y-2">
         <div className="flex items-center space-x-2">
           <span className="text-base">💡</span>
-          <h4 className="font-extrabold text-[12px] leading-tight">Proyecto: Entre Vecinos</h4>
+          <h4 className="font-extrabold text-[12px] leading-tight">Proyecto: Red Vecinal</h4>
         </div>
         <p className="text-[11px] text-emerald-100/90 leading-relaxed">
-          Diseñado para funcionar <strong>sin contraseñas</strong>, con <strong>validación de confianza</strong> y <strong>resiliencia offline</strong> en Pachacamac.
+          Diseñado para funcionar <strong>sin contraseñas</strong>, con <strong>validación de confianza</strong> y <strong>resiliencia offline</strong> en la comunidad.
         </p>
         <div className="flex flex-wrap gap-1 pt-1">
           <span className="px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-200 text-[10px] font-bold border border-emerald-700/60">
