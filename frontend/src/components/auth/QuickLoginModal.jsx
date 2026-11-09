@@ -109,7 +109,7 @@ export default function QuickLoginModal({ isOpen, onClose }) {
       setLastName(last);
       setEmail(currentUser.email || '');
       setPassword('');
-      setPhone(currentUser.phone || '933613514');
+      setPhone(currentUser.phone || '');
       setAddress(currentUser.address || '');
       setAvatar(currentUser.avatar || '');
       if (currentUser.securityQuestions) {
@@ -507,7 +507,7 @@ export default function QuickLoginModal({ isOpen, onClose }) {
                   <input
                     type="text"
                     required
-                    placeholder="ej: renato@barrio.pe"
+                    placeholder="ej: tu.correo@gmail.com"
                     value={loginIdentifier}
                     onChange={(e) => {
                       setLoginIdentifier(e.target.value);
@@ -689,7 +689,7 @@ export default function QuickLoginModal({ isOpen, onClose }) {
                         <input
                           type="text"
                           required
-                          placeholder="ej: yummy@barrio.pe o 933613514"
+                          placeholder="ej: tu.correo@gmail.com o 987654321"
                           value={recoverIdentifier}
                           onChange={(e) => {
                             setRecoverIdentifier(e.target.value);
@@ -956,7 +956,7 @@ export default function QuickLoginModal({ isOpen, onClose }) {
                   <input
                     type="text"
                     required
-                    placeholder="Ej: Yummy"
+                    placeholder="Ej: Carlos"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-xs font-medium"
@@ -969,7 +969,7 @@ export default function QuickLoginModal({ isOpen, onClose }) {
                   <input
                     type="text"
                     required
-                    placeholder="Ej: Untiveros"
+                    placeholder="Ej: Mendoza"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-xs font-medium"
@@ -1039,7 +1039,7 @@ export default function QuickLoginModal({ isOpen, onClose }) {
                   <input
                     type="tel"
                     required
-                    placeholder="933613514"
+                    placeholder="987654321"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
                     maxLength={9}
