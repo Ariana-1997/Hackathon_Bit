@@ -367,7 +367,7 @@ export function NeighborhoodProvider({ children }) {
       return;
     }
     const userToUse = currentUser;
-    const finalLocation = customPubAddress || userToUse.address || userToUse.block || 'Pachacamac';
+    const finalLocation = customPubAddress || userToUse.address || userToUse.block || 'Comunidad Vecinal';
     const detectedBlock = finalLocation.match(/(?:Manzana|Mz\.?)\s*([A-Za-z0-9]+)/i);
     const authorBlock = detectedBlock ? `Manzana ${detectedBlock[1].toUpperCase()}` : (userToUse.block || finalLocation);
 
