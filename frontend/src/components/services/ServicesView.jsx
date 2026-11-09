@@ -110,7 +110,7 @@ export default function ServicesView() {
             <Sparkles className="w-8 h-8 text-slate-300 mx-auto" />
             <h4 className="text-sm font-bold text-slate-700">No encontramos oficios con este filtro</h4>
             <p className="text-xs text-slate-500">
-              ¿Eres vecino y ejerces este oficio en Pachacamac? Sé el primero en publicarlo.
+              ¿Eres vecino y ejerces este oficio en tu comunidad? Sé el primero en publicarlo.
             </p>
             <button
               onClick={() => requireAuth(() => setQuickPublishOpen(true), 'PUBLISH')}
