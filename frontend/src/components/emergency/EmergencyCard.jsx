@@ -37,7 +37,7 @@ export default function EmergencyCard({ emergency }) {
     }
 
     const message = encodeURIComponent(
-      `URGENTE SOS: Vecino, estoy coordinando apoyo para la emergencia "${emergency.title}" en la app Entre Vecinos. Estoy a ${proximityText}.`
+      `URGENTE SOS: Vecino, estoy coordinando apoyo para la emergencia "${emergency.title}" en la app Red Vecinal. Estoy a ${proximityText}.`
     );
 
     const targetUrl = cleanDigits 
