@@ -8,7 +8,26 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DIST_DIR = path.join(__dirname, 'dist');
 const PORT = Number(process.env.PORT || 3000);
-const BACKEND_URL = process.env.BACKEND_URL || process.env.VITE_BACKEND_URL || 'http://localhost:8080';
+
+// Cargar variables de .env si existe
+if (fs.existsSync(path.join(__dirname, '.env'))) {
+  try {
+    const envLines = fs.readFileSync(path.join(__dirname, '.env'), 'utf8').split('\n');
+    for (const line of envLines) {
+      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+      if (match) {
+        const key = match[1];
+        let val = (match[2] || '').trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        if (!process.env[key]) process.env[key] = val;
+      }
+    }
+  } catch {}
+}
+
+const BACKEND_URL = process.env.BACKEND_URL || process.env.VITE_BACKEND_URL || 'https://hackathon-bit-uc0e.onrender.com';
 
 let backend;
 try {
