@@ -1,4 +1,4 @@
-const CACHE_NAME = 'entre-vecinos-v85';
+const CACHE_NAME = 'red-vecinal-v101';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -10,44 +10,47 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  // Delete all older caches to ensure phones see the newest design immediately
+  // Elimina absolutamente todas las cachés anteriores para forzar la actualización en celulares
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
-        cacheNames.map((cache) => {
-          if (cache !== CACHE_NAME) {
-            return caches.delete(cache);
+        cacheNames.map((name) => {
+          if (name !== CACHE_NAME) {
+            console.log('[SW] Eliminando caché antigua:', name);
+            return caches.delete(name);
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
-  // Network first: always try to get the freshest live version from the server
+  const url = new URL(event.request.url);
+
+  // Bypass para APIs y llamadas dinámicas
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/actuator/')) {
+    return;
+  }
+
+  // Network-First para navegación y HTML: siempre busca la versión más reciente del servidor
+  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Cache-First con fallback a red para recursos estáticos
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        if (response && response.status === 200) {
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-        }
-        return response;
-      })
-      .catch(() => {
-        // Offline fallback: when there is NO internet, serve from local cache
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          if (event.request.mode === 'navigate') {
-            return caches.match('/index.html');
-          }
-        });
-      })
+    caches.match(event.request).then((cached) => cached || fetch(event.request))
   );
 });
