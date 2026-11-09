@@ -23,7 +23,7 @@ export default function MapView() {
 
   const userLat = currentUser?.lat || -12.0862;
   const userLng = currentUser?.lng || -77.0503;
-  const userAddress = currentUser?.address || 'La Casica, Pachacamac';
+  const userAddress = currentUser?.address || 'Comunidad Vecinal';
 
   // Inicializar mapa de Leaflet
   useEffect(() => {
