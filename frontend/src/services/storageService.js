@@ -39,6 +39,12 @@ export const storageService = {
     try {
       localStorage.removeItem(STORAGE_KEYS.REGISTERED_USERS);
       localStorage.removeItem(STORAGE_KEYS.OFFLINE_QUEUE);
+      for (const k of [STORAGE_KEYS.USER_PROFILE, STORAGE_KEYS.SERVICES, STORAGE_KEYS.FAVORS, STORAGE_KEYS.EMERGENCIES]) {
+        const raw = localStorage.getItem(k);
+        if (raw && /pachac[aá]mac|entre vecinos/i.test(raw)) {
+          localStorage.removeItem(k);
+        }
+      }
     } catch {}
   },
 
