@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const backendTarget = env.VITE_BACKEND_URL || env.BACKEND_URL || 'http://localhost:8080';
+  const backendTarget = env.VITE_BACKEND_URL || env.BACKEND_URL || 'https://hackathon-bit-uc0e.onrender.com';
 
   return {
     plugins: [react()],
