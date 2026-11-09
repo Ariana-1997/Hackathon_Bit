@@ -61,7 +61,7 @@ export default function ServiceCard({ service }) {
     }
 
     const message = encodeURIComponent(
-      `Hola ${service.author?.name || 'Vecino'}, vi tu servicio de "${service.title}" en la app vecinal Entre Vecinos. Vivo cerca en tu barrio (${service.author?.block || 'Pachacamac'}) y necesito consultar tu disponibilidad.`
+      `Hola ${service.author?.name || 'Vecino'}, vi tu servicio de "${service.title}" en la app vecinal Red Vecinal. Vivo cerca en tu barrio (${service.author?.block || 'Red Vecinal'}) y necesito consultar tu disponibilidad.`
     );
 
     const targetUrl = cleanDigits 
