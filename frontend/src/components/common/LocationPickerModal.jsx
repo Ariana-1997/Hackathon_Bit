@@ -14,13 +14,13 @@ import {
   Loader2 
 } from 'lucide-react';
 
-// Atajos vecinales rápidos para Pachacámac y alrededores
+// Atajos vecinales rápidos para Comunidad y alrededores
 const NEIGHBORHOOD_PRESETS = [
-  { label: 'La Casica (Mz C)', lat: -12.0862, lng: -77.0503, address: 'La Casica, Mz C - Pachacamac' },
-  { label: 'Pachacamac Centro', lat: -12.2289, lng: -76.8586, address: 'Plaza de Armas, Pachacamac' },
-  { label: 'Manzana A (Doña Rosa)', lat: -12.0855, lng: -77.0495, address: 'Manzana A, Pachacamac' },
-  { label: 'Manzana B (Carlos M.)', lat: -12.0870, lng: -77.0515, address: 'Manzana B, Pachacamac' },
-  { label: 'Av. Manuel Valle', lat: -12.2215, lng: -76.8650, address: 'Av. Manuel Valle, Pachacamac' },
+  { label: 'Sector Central (Mz C)', lat: -12.0862, lng: -77.0503, address: 'Sector Central, Mz C' },
+  { label: 'Plaza Central', lat: -12.2289, lng: -76.8586, address: 'Plaza Central' },
+  { label: 'Manzana A (Doña Rosa)', lat: -12.0855, lng: -77.0495, address: 'Manzana A, Comunidad' },
+  { label: 'Manzana B (Carlos M.)', lat: -12.0870, lng: -77.0515, address: 'Manzana B, Comunidad' },
+  { label: 'Avenida Principal', lat: -12.2215, lng: -76.8650, address: 'Avenida Principal, Comunidad' },
 ];
 
 export default function LocationPickerModal({
@@ -33,12 +33,12 @@ export default function LocationPickerModal({
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
 
-  // Coordenadas iniciales (Pachacámac por defecto si no vienen dadas)
+  // Coordenadas iniciales (Comunidad por defecto si no vienen dadas)
   const defaultLat = initialCoords?.lat || -12.0862;
   const defaultLng = initialCoords?.lng || -77.0503;
 
   const [currentCoords, setCurrentCoords] = useState({ lat: defaultLat, lng: defaultLng });
-  const [selectedAddress, setSelectedAddress] = useState(initialAddress || 'Pachacamac, Lima');
+  const [selectedAddress, setSelectedAddress] = useState(initialAddress || 'Comunidad, Lima');
   const [houseReference, setHouseReference] = useState('');
   const [isMoving, setIsMoving] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
@@ -144,7 +144,7 @@ export default function LocationPickerModal({
           // Extraer componentes relevantes (calle, manzana, barrio, distrito)
           const road = addr.road || addr.pedestrian || addr.footway || '';
           const neighborhood = addr.neighbourhood || addr.suburb || addr.residential || '';
-          const cityDistrict = addr.city_district || addr.district || addr.suburb || 'Pachacamac';
+          const cityDistrict = addr.city_district || addr.district || addr.suburb || 'Comunidad';
           
           let builtAddress = '';
           if (road && neighborhood) {
@@ -176,7 +176,7 @@ export default function LocationPickerModal({
 
   const fallbackAddress = (lat, lng) => {
     // Si no hay red, construir dirección representativa
-    setSelectedAddress(`Sector Pachacamac (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+    setSelectedAddress(`Sector Comunidad (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
   };
 
   // Centrar en ubicación GPS real del celular/navegador
@@ -202,7 +202,7 @@ export default function LocationPickerModal({
       (err) => {
         setIsLocatingGps(false);
         console.warn('GPS error, using fallback:', err.message);
-        // Volar a la última ubicación GPS conocida; si no hay, a Pachacámac Centro
+        // Volar a la última ubicación GPS conocida; si no hay, a Plaza Central
         const last = geolocationService.getLastPosition();
         if (mapInstanceRef.current) {
           mapInstanceRef.current.flyTo(
