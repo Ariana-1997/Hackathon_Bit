@@ -36,7 +36,7 @@ class ErrorBoundary extends React.Component {
             <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center mx-auto text-2xl font-black">
               🤝
             </div>
-            <h2 className="text-base font-extrabold text-slate-900">Entre Vecinos</h2>
+            <h2 className="text-base font-extrabold text-slate-900">Red Vecinal</h2>
             <p className="text-xs text-slate-600 leading-relaxed">
               Detectamos una nueva versión en tu navegador. Haz clic para actualizar y entrar sin problemas.
             </p>
@@ -142,7 +142,7 @@ function MainApp() {
           <div className="sticky top-0 z-20 px-6 py-3 bg-white/95 backdrop-blur-md border-b border-slate-100 flex items-center justify-between shadow-2xs">
             <div className="flex items-center space-x-2">
               <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-              <span className="text-xs font-black text-slate-800 tracking-tight">Barrio Pachacamac</span>
+              <span className="text-xs font-black text-slate-800 tracking-tight">Red Vecinal</span>
             </div>
             <div className="flex items-center space-x-2">
               {backendOnline ? (
