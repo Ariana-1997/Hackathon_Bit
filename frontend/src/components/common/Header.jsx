@@ -61,7 +61,7 @@ export default function Header() {
               <HeartHandshake className={`w-3 h-3 ${isEmergency ? 'text-white' : 'text-[#2C4967]'} stroke-[2.5]`} />
             </div>
             <h1 className="font-extrabold text-sm tracking-tight leading-none text-white">
-              Entre Vecinos
+              Red Vecinal
             </h1>
           </div>
         </div>
