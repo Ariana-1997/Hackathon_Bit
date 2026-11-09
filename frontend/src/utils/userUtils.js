@@ -1,7 +1,7 @@
 /**
  * Extrae las iniciales de un nombre para mostrar como avatar predeterminado
  * Ejemplos:
- * "Yummy Untiveros" -> "YU"
+ * "Carlos Mendoza" -> "CM"
  * "Carlos Mendoza" -> "CM"
  * "Elena" -> "EL"
  * "Doña Rosa Quispe" -> "DQ"
