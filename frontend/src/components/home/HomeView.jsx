@@ -46,7 +46,7 @@ export default function HomeView() {
             <span className="animate-wave inline-block select-none" role="img" aria-label="saludo">👋</span>
           </h2>
           <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-            Bienvenido a <strong>Entre Vecinos</strong>: la red comunitaria creada para conectar 
+            Bienvenido a <strong>Red Vecinal</strong>: la red comunitaria creada para conectar 
             oficios de confianza, ayuda solidaria y apoyo mutuo a la vuelta de tu casa.
           </p>
         </div>
