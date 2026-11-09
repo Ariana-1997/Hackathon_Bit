@@ -29,7 +29,7 @@ export default function FavorCard({ favor }) {
     }
 
     const message = encodeURIComponent(
-      `Hola ${favor.author?.name || 'Vecino'}, vi tu publicación solidaria de "${favor.title}" en la app Entre Vecinos. Vivo cerca en tu barrio (${favor.author?.block || 'Pachacamac'}) y me gustaría coordinar.`
+      `Hola ${favor.author?.name || 'Vecino'}, vi tu publicación solidaria de "${favor.title}" en la app Red Vecinal. Vivo cerca en tu barrio (${favor.author?.block || 'Red Vecinal'}) y me gustaría coordinar.`
     );
 
     const targetUrl = cleanDigits 
