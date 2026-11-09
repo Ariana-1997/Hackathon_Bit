@@ -353,13 +353,13 @@ export default function QuickLoginModal({ isOpen, onClose }) {
     }
     const userTypedAddress = address.trim();
     const detectedBlock = userTypedAddress.match(/(?:Manzana|Mz\.?)\s*([A-Za-z0-9]+)/i);
-    const blockVal = detectedBlock ? `Manzana ${detectedBlock[1].toUpperCase()}` : (currentUser?.block || userTypedAddress || 'Pachacamac');
+    const blockVal = detectedBlock ? `Manzana ${detectedBlock[1].toUpperCase()}` : (currentUser?.block || userTypedAddress || 'Comunidad Vecinal');
 
     const saved = await updateUserProfile({
       name: fullName,
       email: email.trim().toLowerCase(),
       avatar: avatar,
-      address: userTypedAddress || currentUser?.address || 'Pachacamac',
+      address: userTypedAddress || currentUser?.address || 'Comunidad Vecinal',
       block: blockVal,
       phone: phone.trim(),
       password: password,
@@ -397,14 +397,14 @@ export default function QuickLoginModal({ isOpen, onClose }) {
 
     const userTypedAddress = address.trim();
     const detectedBlock = userTypedAddress.match(/(?:Manzana|Mz\.?)\s*([A-Za-z0-9]+)/i);
-    const blockVal = detectedBlock ? `Manzana ${detectedBlock[1].toUpperCase()}` : (userTypedAddress || 'Pachacamac');
+    const blockVal = detectedBlock ? `Manzana ${detectedBlock[1].toUpperCase()}` : (userTypedAddress || 'Comunidad Vecinal');
 
     const saved = await updateUserProfile({
       name: fullName,
       email: email.trim().toLowerCase(),
       password: password,
       avatar: avatar,
-      address: userTypedAddress || 'Pachacamac',
+      address: userTypedAddress || 'Comunidad Vecinal',
       block: blockVal,
       phone: cleanPhone,
       lat: coords?.lat ?? currentUser?.lat ?? null,
@@ -1057,7 +1057,7 @@ export default function QuickLoginModal({ isOpen, onClose }) {
                   <div className="relative flex-1">
                     <input
                       type="text"
-                      placeholder="Ej: La Casica, Mz C - Pachacamac"
+                      placeholder="Ej: La Casica, Mz C - Comunidad Vecinal"
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-xs"
