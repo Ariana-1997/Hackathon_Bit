@@ -36,13 +36,13 @@ export default function QuickPublishModal() {
 
   // Obtener la dirección registrada en el perfil del usuario actual
   const getDisplayLocation = () => {
-    if (!currentUser) return 'Pachacamac, Lima';
+    if (!currentUser) return 'Comunidad Vecinal';
     const addr = currentUser.address?.trim();
     const blk = currentUser.block?.trim();
     if (addr && blk && !addr.toLowerCase().includes(blk.toLowerCase()) && !addr.toLowerCase().includes('manzana') && !addr.toLowerCase().includes('mz')) {
       return `${addr} (${blk})`;
     }
-    return addr || blk || 'Pachacamac, Lima';
+    return addr || blk || 'Comunidad Vecinal';
   };
 
   if (!quickPublishOpen) return null;
@@ -80,12 +80,12 @@ export default function QuickPublishModal() {
     if (selectedType === PUBLICATION_TYPES.SERVICE) {
       if (selectedCategory?.id === 'otros' && customNote.trim()) {
         finalTitle = customNote.trim();
-        defaultDesc = `Ofrezco mis servicios de ${customNote.trim()} a vecinos cercanos en Pachacamac. Sin costo de traslado.`;
+        defaultDesc = `Ofrezco mis servicios de ${customNote.trim()} a vecinos cercanos en la comunidad. Sin costo de traslado.`;
       } else if (customNote.trim()) {
         finalTitle = `${selectedCategory.label}: ${customNote.trim()}`;
-        defaultDesc = `Ofrezco mis servicios en ${selectedCategory.label} a vecinos cercanos en Pachacamac. Sin costo de traslado.`;
+        defaultDesc = `Ofrezco mis servicios en ${selectedCategory.label} a vecinos cercanos en la comunidad. Sin costo de traslado.`;
       } else {
-        defaultDesc = `Ofrezco mis servicios en ${selectedCategory.label} a vecinos cercanos en Pachacamac. Sin costo de traslado.`;
+        defaultDesc = `Ofrezco mis servicios en ${selectedCategory.label} a vecinos cercanos en la comunidad. Sin costo de traslado.`;
       }
     } else if (selectedType === PUBLICATION_TYPES.FAVOR) {
       if (customNote.trim()) {
